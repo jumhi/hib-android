@@ -37,6 +37,16 @@
 
     <!-- Media playback control  -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- H.I.B Find My: let the Mac locate this phone (also in the background) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- H.I.B: Touch ID on Phone -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- H.I.B Scenes: Do Not Disturb / silent mode from Mac scenes -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
     <!-- Camera permission for QR code scanner -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -64,6 +74,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AirSync"
         tools:targetApi="36">
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.clipboard-files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/clipboard_file_paths" />
+        </provider>
 
 
 
@@ -134,6 +154,31 @@
             </intent-filter>
         </activity>
 
+        <!-- H.I.B: Flick to Mac — share-sheet overlay; flick the card up to throw it onto the Mac -->
+        <activity
+            android:name=".presentation.ui.activities.FlickActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/flick_to_mac_label"
+            android:taskAffinity=""
+            android:theme="@style/Theme.AirSync.Transparent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".service.OutboundQuickShareService"
             android:exported="false"
@@ -146,6 +191,19 @@
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
+        </service>
+
+        <service
+            android:name=".service.MirrorAttachmentAccessibilityService"
+            android:exported="false"
+            android:label="@string/mirror_attachment_accessibility_title"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/mirror_attachment_accessibility_service" />
         </service>
 
         <!-- QR Code Scanner Activity -->
@@ -162,6 +220,16 @@
         </activity>
 
         <!-- Permissions Activity -->
+        <!-- H.I.B: Desk Deck (full-screen control deck for the Mac) -->
+        <activity
+            android:name=".deskdeck.DeskDeckActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false"
+            android:label="Desk Deck"
+            android:launchMode="singleTask"
+            android:screenOrientation="fullSensor"
+            android:theme="@style/Theme.AirSync" />
+
         <activity
             android:name=".presentation.ui.activities.PermissionsActivity"
             android:exported="false"
@@ -216,6 +284,35 @@
             android:name=".quickshare.QuickShareService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <!-- H.I.B Find My: relay poll fallback + lost-phone message screen -->
+        <service
+            android:name=".findmy.FindMyPollJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <activity
+            android:name=".findmy.FindMyMessageActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.AirSync" />
+
+        <!-- H.I.B Ring My Phone -->
+        <receiver
+            android:name=".service.RingStopReceiver"
+            android:exported="false" />
+        <!-- ADB fallback; DUMP is held only by the adb shell and the system -->
+        <receiver
+            android:name=".service.RingCommandReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.sameerasw.airsync.RING_PHONE" />
+                <action android:name="com.sameerasw.airsync.STOP_RING_PHONE" />
+            </intent-filter>
+        </receiver>
 
         <!-- Call Receiver - listens for telephony events -->
         <receiver
@@ -297,6 +394,20 @@
             android:launchMode="singleInstance"
             android:excludeFromRecents="true"
             android:taskAffinity="" />
+
+        <!-- H.I.B: Touch ID on Phone — BiometricPrompt for Mac approval requests -->
+        <activity
+            android:name=".approval.ApprovalActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.AirSync.Transparent" />
+
+        <receiver
+            android:name=".approval.ApprovalDenyReceiver"
+            android:exported="false" />
 
     </application>
 

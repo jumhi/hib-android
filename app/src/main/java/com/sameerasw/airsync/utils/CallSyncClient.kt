@@ -52,7 +52,7 @@ class CallSyncClient(
             val request = Request.Builder()
                 .url("$wsUrl/ws/calls")
                 .header("Authorization", "Bearer $authToken")
-                .header("User-Agent", "AirSync-Android/2.1")
+                .header("User-Agent", "HIB-Android/2.1")
                 .build()
 
             Log.d(TAG, "Connecting to WebSocket: $wsUrl/ws/calls")
@@ -128,7 +128,7 @@ class CallSyncClient(
                 .url("$serverBaseUrl/api/calls/sync")
                 .post(requestBody)
                 .header("Authorization", "Bearer $authToken")
-                .header("User-Agent", "AirSync-Android/2.1")
+                .header("User-Agent", "HIB-Android/2.1")
                 .build()
 
             val response = httpClient.newCall(request).execute()

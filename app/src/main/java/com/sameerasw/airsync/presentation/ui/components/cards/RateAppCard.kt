@@ -61,7 +61,7 @@ fun RateAppCard(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "Enjoying AirSync?",
+                    text = "Enjoying H.I.B?",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )

@@ -3,7 +3,7 @@
     <background android:drawable="@color/branding_icon_background" />
     <foreground>
         <inset
-            android:drawable="@drawable/avatar"
+            android:drawable="@drawable/hibbit"
             android:inset="15%" />
     </foreground>
 </adaptive-icon>

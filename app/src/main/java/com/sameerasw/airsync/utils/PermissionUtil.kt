@@ -13,6 +13,7 @@ import android.text.TextUtils
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import com.sameerasw.airsync.service.MediaNotificationListener
+import com.sameerasw.airsync.service.MirrorAttachmentAccessibilityService
 
 object PermissionUtil {
 
@@ -129,6 +130,26 @@ object PermissionUtil {
         context.startActivity(intent)
     }
 
+    fun isMirrorAttachmentAccessibilityEnabled(context: Context): Boolean {
+        val componentName = ComponentName(
+            context,
+            MirrorAttachmentAccessibilityService::class.java
+        ).flattenToString()
+        val enabledServices = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        )
+        return !enabledServices.isNullOrBlank() && enabledServices
+            .split(':')
+            .any { it.equals(componentName, ignoreCase = true) }
+    }
+
+    fun openAccessibilitySettings(context: Context) {
+        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        })
+    }
+
     /**
      * Check if MANAGE_EXTERNAL_STORAGE permission is granted (Android 11+)
      */
@@ -216,6 +237,10 @@ object PermissionUtil {
             missing.add("Answer Calls")
         }
 
+        if (!isMirrorAttachmentAccessibilityEnabled(context)) {
+            missing.add("Mirror Attachment Automation")
+        }
+
         return missing
     }
 
@@ -283,6 +308,13 @@ object PermissionUtil {
         ) {
             optional.add("Answer Calls")
         }
+
+        if (!isMirrorAttachmentAccessibilityEnabled(context)) {
+            optional.add("Mirror Attachment Automation")
+        }
+
+        // H.I.B Scenes: Do Not Disturb access and Wi-Fi name (location)
+        optional.addAll(com.sameerasw.airsync.scenes.ScenesPermissions.missing(context))
 
         return optional
     }

@@ -241,9 +241,12 @@ object JsonUtil {
      * Creates a JSON string for clipboard updates
      */
     fun createClipboardUpdateJson(text: String): String {
-        // Escape quotes and newlines in the text
-        val escapedText = text.replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
-        return """{"type":"clipboardUpdate","data":{"text":"$escapedText"}}"""
+        // JSONObject escapes backslashes, tabs and control characters correctly;
+        // hand-escaping broke paths like C:\\Users and dropped the clip on the Mac.
+        return org.json.JSONObject()
+            .put("type", "clipboardUpdate")
+            .put("data", org.json.JSONObject().put("text", text))
+            .toString()
     }
 
     /**

@@ -47,6 +47,7 @@ object MacModelMapper {
         val hay = "$nameStr$modelStr$typeStr".lowercase()
 
         return when {
+            hay.contains("iphone") || hay.contains("ipad") -> R.drawable.ic_device_iphone
             hay.contains("macbookair") -> R.drawable.rounded_laptop_mac_24
             hay.contains("macbookpro") -> R.drawable.rounded_laptop_mac_24
             hay.contains("macmini") -> R.drawable.ic_mac_mini_24
@@ -72,6 +73,7 @@ object MacModelMapper {
         val hay = "$nameStr$modelStr$typeStr".lowercase()
 
         return when {
+            hay.contains("iphone") || hay.contains("ipad") -> R.drawable.ic_device_iphone
             hay.contains("macbookair") -> R.drawable.ic_device_macbook_air
             hay.contains("macbookpro") -> R.drawable.ic_device_macbook_air
             hay.contains("macmini") -> R.drawable.ic_device_mac_mini
@@ -87,6 +89,7 @@ object MacModelMapper {
     private fun resolveDrawable(model: String, hay: String): Int {
         // 1) Explicit Model Matching based on user mapping
         return when {
+            hay.contains("iphone") || hay.contains("ipad") -> R.drawable.ic_device_iphone
             // MacBook Air Gen 3
             isMatch(
                 model,

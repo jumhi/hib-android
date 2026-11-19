@@ -44,7 +44,7 @@ object ShortcutUtil {
             shortcuts.add(
                 ShortcutInfoCompat.Builder(context, SHORTCUT_ID_RESUME)
                     .setShortLabel("Resume")
-                    .setLongLabel("Resume AirSync")
+                    .setLongLabel("Resume H.I.B")
                     .setIcon(IconCompat.createWithResource(context, R.drawable.rounded_play_arrow_24))
                     .setIntent(Intent(context, ClipboardActionActivity::class.java).apply {
                         action = DASH_ACTION_RESUME
@@ -89,7 +89,7 @@ object ShortcutUtil {
             shortcuts.add(
                 ShortcutInfoCompat.Builder(context, SHORTCUT_ID_PAUSE)
                     .setShortLabel("Pause")
-                    .setLongLabel("Pause AirSync")
+                    .setLongLabel("Pause H.I.B")
                     .setIcon(IconCompat.createWithResource(context, R.drawable.rounded_pause_24))
                     .setIntent(Intent(context, ClipboardActionActivity::class.java).apply {
                         action = DASH_ACTION_PAUSE

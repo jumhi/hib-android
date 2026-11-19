@@ -253,12 +253,31 @@ fun PermissionsScreen(
                                         isCritical = false
                                     )
                                 }
+
+                                "Mirror Attachment Automation" -> {
+                                    PermissionButton(
+                                        permissionName = permission,
+                                        description = "Attach files dropped onto the Mac mirror",
+                                        onExplainClick = {
+                                            showDialog = PermissionType.MIRROR_ATTACHMENTS
+                                        },
+                                        isCritical = false
+                                    )
+                                }
+
+                                com.sameerasw.airsync.scenes.ScenesPermissions.DND,
+                                com.sameerasw.airsync.scenes.ScenesPermissions.LOCATION -> {
+                                    com.sameerasw.airsync.scenes.ScenesPermissionRow(permission)
+                                }
                             }
                         }
                     }
                 }
             }
         }
+
+        // H.I.B Find My: precise + "Allow all the time" location
+        com.sameerasw.airsync.findmy.FindMyPermissionRow()
 
         Spacer(modifier = Modifier.height(24.dp))
     }
@@ -308,6 +327,10 @@ fun PermissionsScreen(
 
                     PermissionType.ANSWER_CALLS -> {
                         onRequestAnswerCallsPermission?.invoke()
+                    }
+
+                    PermissionType.MIRROR_ATTACHMENTS -> {
+                        PermissionUtil.openAccessibilitySettings(context)
                     }
                 }
             }
@@ -371,5 +394,4 @@ private fun PermissionButton(
         }
     }
 }
-
 

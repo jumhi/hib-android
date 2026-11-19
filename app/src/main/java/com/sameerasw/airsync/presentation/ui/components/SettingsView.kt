@@ -643,31 +643,6 @@ fun SettingsView(
                                         viewModel.setEssentialsConnectionEnabled(enabled)
                                     }
                                 )
-                            } else {
-                                ListItem(
-                                    colors = ListItemDefaults.colors(
-                                        containerColor = androidx.compose.ui.graphics.Color.Transparent
-                                    ),
-                                    headlineContent = { Text(stringResource(R.string.download_essentials)) },
-                                    supportingContent = {
-                                        Text(stringResource(R.string.download_essentials_summary))
-                                    },
-                                    trailingContent = {
-                                        Button(
-                                            onClick = {
-                                                HapticUtil.performClick(haptics)
-                                                val intent = android.content.Intent(
-                                                    android.content.Intent.ACTION_VIEW,
-                                                    android.net.Uri.parse("https://github.com/sameerasw/essentials/releases/latest")
-                                                )
-                                                intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                                                context.startActivity(intent)
-                                            }
-                                        ) {
-                                            Text("Download")
-                                        }
-                                    }
-                                )
                             }
                         }
                         "Widget" -> {

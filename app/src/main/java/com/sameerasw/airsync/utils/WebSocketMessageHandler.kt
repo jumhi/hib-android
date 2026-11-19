@@ -5,10 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
+import android.util.Base64
 import com.sameerasw.airsync.BuildConfig
 import com.sameerasw.airsync.data.local.DataStoreManager
 import com.sameerasw.airsync.data.repository.AirSyncRepositoryImpl
 import com.sameerasw.airsync.service.MediaNotificationListener
+import com.sameerasw.airsync.service.MirrorAttachmentAccessibilityService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -59,19 +61,27 @@ object WebSocketMessageHandler {
      * @param message Raw JSON message string.
      */
     fun handleIncomingMessage(context: Context, json: String) {
-        Log.d(TAG, "Received WebSocket message: $json")
         try {
             val jsonObject = JSONObject(json)
             val type = jsonObject.optString("type")
-            Log.d(TAG, "Processing message type: $type")
             val data = jsonObject.optJSONObject("data") ?: JSONObject()
 
-            if (type != "ping") {
-                Log.d(TAG, "Handling message type: $type")
+            if (type != "ping" && type != "screenFrame") {
+                Log.d(TAG, "Handling message type: $type (${json.length} characters)")
             }
 
             when (type) {
                 "clipboardUpdate" -> handleClipboardUpdate(context, data)
+                "clipboardImageUpdate" -> handleClipboardImageUpdate(context, data)
+                "ringPhone" -> {
+                    if (data.optString("action") == "stop") PhoneRinger.stop(context) else PhoneRinger.start(context)
+                }
+                "phoneAudioState" -> PhoneAudioRemote.onMacState(data)
+                "findRing", "findLocate", "findLock", "findMessage", "findPing", "findRelayConfig",
+                "findRelayWake", "findMacLocation", "findMacRingState" ->
+                    com.sameerasw.airsync.findmy.FindMyHandler.handle(context, type, data, viaRelay = false)
+                "screenFrame" -> handleScreenFrame(data)
+                "screenShareState" -> handleScreenShareState(data)
                 "volumeControl" -> handleVolumeControl(context, data)
                 "mediaControl" -> handleMediaControl(context, data)
                 "dismissNotification" -> handleNotificationDismissal(data)
@@ -88,6 +98,24 @@ object WebSocketMessageHandler {
                 "browseLs" -> handleBrowseLs(context, data)
                 "startQuickShare" -> handleStartQuickShare(context)
                 "callControl" -> handleCallControl(context, data)
+                // H.I.B: Flick to Mac — chunk acks drive the flick file transfer window; flickLanded = final haptic tick
+                "fileChunkAck" -> FlickSender.onChunkAck(data)
+                "flickLanded" -> FlickSender.onFlickLanded(data)
+                // H.I.B: Search your phone from the Mac (search + fetch a result back)
+                "phoneSearch" -> com.sameerasw.airsync.phonesearch.PhoneSearchHandler.handleSearch(context, data)
+                "phoneFetchFile" -> com.sameerasw.airsync.phonesearch.PhoneSearchHandler.handleFetch(context, data)
+                // H.I.B: Touch ID on Phone — approve Mac sudo/auth requests with BiometricPrompt
+                "approvalRequest" -> com.sameerasw.airsync.approval.PhoneApprovalManager.onRequest(context, data)
+                "approvalCancel" -> com.sameerasw.airsync.approval.PhoneApprovalManager.onCancel(context, data)
+                // H.I.B: Desk Deck (live Mac stats + action results)
+                "deckState" -> com.sameerasw.airsync.deskdeck.DeskDeckRemote.onDeckState(data)
+                "deckActionResult" -> com.sameerasw.airsync.deskdeck.DeskDeckRemote.onActionResult(data)
+                "mirrorAttachment" -> {
+                    MirrorAttachmentAccessibilityService.requestAttachment(context, data)
+                }
+                // H.I.B Scenes
+                "scenesList", "phoneAction", "sceneRunResult" ->
+                    com.sameerasw.airsync.scenes.ScenesRemote.handle(context, type, data)
                 else -> {
                     Log.w(TAG, "Unknown message type: $type")
                 }
@@ -126,6 +154,41 @@ object WebSocketMessageHandler {
         } catch (e: Exception) {
             Log.e(TAG, "Error handling clipboard update: ${e.message}")
         }
+    }
+
+    private fun handleClipboardImageUpdate(context: Context, data: JSONObject?) {
+        try {
+            if (data == null) return
+            val encoded = data.optString("base64")
+            if (encoded.isBlank()) return
+            val bytes = Base64.decode(encoded, Base64.DEFAULT)
+            val mime = data.optString("mime", "image/png")
+            val name = data.optString("name", "HIB-Clipboard.png")
+            if (ClipboardUtil.setClipboardImage(context, bytes, mime, name)) {
+                Log.d(TAG, "Universal clipboard image received: $name (${bytes.size} bytes)")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling clipboard image update", e)
+        }
+    }
+
+    private fun handleScreenFrame(data: JSONObject?) {
+        try {
+            if (data == null) return
+            val encoded = data.optString("base64")
+            if (encoded.isBlank()) return
+            val timestamp = data.optLong("timestamp", System.currentTimeMillis())
+            IPhoneScreenMirrorManager.submitFrame(
+                Base64.decode(encoded, Base64.DEFAULT),
+                timestamp
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error decoding iPhone screen frame", e)
+        }
+    }
+
+    private fun handleScreenShareState(data: JSONObject?) {
+        IPhoneScreenMirrorManager.setActive(data?.optBoolean("active", false) == true)
     }
 
     /**
@@ -550,6 +613,12 @@ object WebSocketMessageHandler {
                 val macName = data.optString("name", "")
                 val isPlus = data.optBoolean("isPlusSubscription", false)
                 val macVersion = data.optString("version", "3.0.0")
+                val hostType = data.optString("type", data.optString("deviceType", ""))
+                val hostCategory = data.optString("categoryType", "")
+                val isIOSHost = hostType.equals("iPhone", ignoreCase = true) ||
+                    hostType.equals("iPad", ignoreCase = true) ||
+                    hostCategory.equals("iPhone", ignoreCase = true) ||
+                    hostCategory.equals("iPad", ignoreCase = true)
 
                 Log.d(
                     TAG,
@@ -653,6 +722,13 @@ object WebSocketMessageHandler {
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Unable to update connected device info from macInfo: ${e.message}")
+                }
+
+                // The iOS companion only exchanges clipboard data. Avoid extracting and
+                // uploading every Android launcher icon to a host that cannot use them.
+                if (isIOSHost) {
+                    Log.d(TAG, "iOS H.I.B host detected; skipping Android app icon sync")
+                    return@launch
                 }
 
                 // Build Android launcher package list (lightweight)

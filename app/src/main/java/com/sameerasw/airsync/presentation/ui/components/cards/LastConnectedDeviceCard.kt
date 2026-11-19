@@ -68,7 +68,7 @@ fun LastConnectedDeviceCard(
                 val previewRes = DevicePreviewResolver.getPreviewRes(device)
                 Image(
                     painter = painterResource(id = previewRes),
-                    contentDescription = "Connected Mac preview",
+                    contentDescription = "Connected device preview",
                     modifier = Modifier.fillMaxWidth(0.45f),
                     contentScale = ContentScale.Fit,
                     colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.primary)

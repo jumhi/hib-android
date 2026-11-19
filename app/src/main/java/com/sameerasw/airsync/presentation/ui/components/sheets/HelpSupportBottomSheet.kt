@@ -64,20 +64,20 @@ fun HelpSupportBottomSheet(
             HelpSection(
                 title = "Getting Started",
                 iconRes = R.drawable.rounded_qr_code_scanner_24,
-                content = "To connect your Mac, ensure both devices are on the same Wi-Fi network or with Extended networking on tailscale or similar network. Scan the QR code in AirSync for Mac.",
-                links = listOf("Manual Auth Info" to "https://airsync.notion.site")
+                content = "To connect, keep both devices on the same Wi-Fi network. Scan the QR code shown by H.I.B on your Mac or iPhone.",
+                links = emptyList()
             ),
             HelpSection(
                 title = "Permissions & Usage",
                 iconRes = R.drawable.rounded_security_24,
                 content = "• Notification Access: Required to sync alerts/media. For sideloaded installs, enable 'Restricted Settings' in App Info.\n• Post Notifications: For the ongoing connection indicator.\n• Background Usage: Keeps the connection alive.\n• Storage: Required for wallpaper sync (still images only).",
-                links = listOf("Privacy Policy" to "https://www.sameerasw.com/airsync/privacy")
+                links = emptyList()
             ),
             HelpSection(
                 title = "ADB & Mirroring",
                 iconRes = R.drawable.rounded_laptop_mac_24,
-                content = "Install 'android-platform-tools' and 'scrcpy' on Mac via brew. Enable Wireless Debugging in Developer Options on Android. Use 'adb pair ip:port' with the code provided. Mirroring is an AirSync+ feature.",
-                links = listOf("ADB Setup Guide" to "https://www.notion.so/2-5-ADB-and-mirroring-setup-2549c6099d408072b46cfa517ebf2719")
+                content = "Install 'android-platform-tools' and 'scrcpy' on Mac via brew. Enable Wireless Debugging in Developer Options on Android. Use 'adb pair ip:port' with the code provided. Mirroring is an H.I.B+ feature.",
+                links = emptyList()
             ),
             HelpSection(
                 title = "Re-connection",
@@ -87,13 +87,13 @@ fun HelpSupportBottomSheet(
             HelpSection(
                 title = "Updates",
                 iconRes = R.drawable.rounded_notifications_active_24,
-                content = "Update the Android app via Google Play Store. The macOS app has a built-in updater.",
+                content = "Install new H.I.B builds on your phone when they are available. The macOS app has a built-in updater.",
             ),
             HelpSection(
                 title = "Troubleshooting",
                 iconRes = R.drawable.rounded_troubleshoot_24,
                 content = "• IP N/A on Mac: Ensure LAN connection (not just internet).\n• Random Disconnects: Check battery/data saving policies and network stability.\n• Black Display: If 'Darken screen' is on during mirroring, use ⌥+Shift+O to reveal.",
-                links = listOf("Full FAQ" to "https://airsync.notion.site")
+                links = emptyList()
             )
         )
     }
@@ -128,40 +128,7 @@ fun HelpSupportBottomSheet(
                 }
             }
 
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Need more help?",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 32.dp, top = 8.dp),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    SupportButton(
-                        text = "GitHub",
-                        iconRes = R.drawable.brand_github,
-                        onClick = {
-                            openUrl(
-                                context,
-                                "https://github.com/sameerasw/airsync-android/issues"
-                            )
-                        }
-                    )
-                    SupportButton(
-                        text = "Telegram",
-                        iconRes = R.drawable.brand_telegram,
-                        onClick = { openUrl(context, "https://t.me/tidwib") },
-                        outlined = true
-                    )
-                }
-            }
+            item { Spacer(modifier = Modifier.height(32.dp)) }
         }
     }
 }

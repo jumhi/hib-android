@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import com.sameerasw.airsync.utils.discovery.DiscoverySource
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -106,6 +107,7 @@ import com.sameerasw.airsync.data.local.DataStoreManager
 import com.sameerasw.airsync.presentation.ui.activities.QRScannerActivity
 import com.sameerasw.airsync.presentation.ui.components.AirSyncFloatingToolbar
 import com.sameerasw.airsync.presentation.ui.components.FloatingMediaPlayer
+import com.sameerasw.airsync.presentation.ui.components.IPhoneMirrorOverlay
 import com.sameerasw.airsync.presentation.ui.components.RoundedCardContainer
 import com.sameerasw.airsync.presentation.ui.components.SettingsView
 import com.sameerasw.airsync.presentation.ui.components.buttons.ListExpandToggleButton
@@ -125,6 +127,7 @@ import com.sameerasw.airsync.presentation.viewmodel.AirSyncViewModel
 import com.sameerasw.airsync.utils.ClipboardSyncManager
 import com.sameerasw.airsync.utils.HapticUtil
 import com.sameerasw.airsync.utils.JsonUtil
+import com.sameerasw.airsync.utils.IPhoneScreenMirrorManager
 import com.sameerasw.airsync.utils.MacDeviceStatusManager
 import com.sameerasw.airsync.utils.WebSocketMessageHandler
 import com.sameerasw.airsync.utils.WebSocketUtil
@@ -191,10 +194,22 @@ fun AirSyncMainScreen(
     // Volume & Media state
     var volume by remember { mutableFloatStateOf(50f) }
     var isMuted by remember { mutableStateOf(false) }
-
     // Observe Mac Status
     val macStatus by MacDeviceStatusManager.macDeviceStatus.collectAsState()
     val albumArtBitmap by MacDeviceStatusManager.albumArt.collectAsState()
+    val iphoneScreenFrame by IPhoneScreenMirrorManager.frame.collectAsState()
+    val iphoneScreenActive by IPhoneScreenMirrorManager.isActive.collectAsState()
+    var showIphoneMirror by rememberSaveable { mutableStateOf(false) }
+    var iphoneViewerDismissed by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(iphoneScreenActive) {
+        if (iphoneScreenActive && !iphoneViewerDismissed) {
+            showIphoneMirror = true
+        } else if (!iphoneScreenActive) {
+            showIphoneMirror = false
+            iphoneViewerDismissed = false
+        }
+    }
 
     // Sync volume and mute state with Mac status updates
     LaunchedEffect(macStatus?.music) {
@@ -348,9 +363,16 @@ fun AirSyncMainScreen(
                         connectionResult = connected
                     },
                     onMessage = { response ->
-                        scope.launch(Dispatchers.Main) {
-                            Log.d("AirSyncMainScreen", "Message received: $response")
-                            viewModel.setResponse("Received: $response")
+                        // Screen frames arrive many times a second with large payloads; work out
+                        // the type cheaply here instead of parsing JSON on the main thread.
+                        val responseType = Regex("\"type\"\\s*:\\s*\"([^\"]+)\"")
+                            .find(response.take(256))?.groupValues?.get(1)
+                            ?: if (response.contains("\"screenFrame\"")) "screenFrame" else "message"
+                        if (responseType != "screenFrame") {
+                            scope.launch(Dispatchers.Main) {
+                                Log.d("AirSyncMainScreen", "Message received: $responseType")
+                                viewModel.setResponse("Received: $responseType")
+                            }
                         }
                     }
                 )
@@ -628,7 +650,8 @@ fun AirSyncMainScreen(
                 viewModel.addClipboardEntry(text, isFromPc = false)
             }
             ClipboardSyncManager.startSync(context)
-        } else {
+        } else if (!uiState.isClipboardSyncEnabled) {
+            // Only stop when the user turned sync off; the background service owns it otherwise.
             ClipboardSyncManager.stopSync(context)
         }
     }
@@ -660,7 +683,7 @@ fun AirSyncMainScreen(
             title = { Text("Connection failed") },
             text = {
                 Text(uiState.authFailureMessage.ifEmpty {
-                    "Authentication failed. Please re-scan the QR code on your Mac to ensure the encryption key matches."
+                    "Authentication failed. Please re-scan the QR code on the device running H.I.B so the encryption key matches."
                 })
             },
             confirmButton = {
@@ -701,8 +724,8 @@ fun AirSyncMainScreen(
 
     DisposableEffect(Unit) {
         onDispose {
+            // Leaving the screen must not stop syncing: the service keeps the watcher running.
             ClipboardSyncManager.setOnClipboardSentCallback(null)
-            ClipboardSyncManager.stopSync(context)
         }
     }
 
@@ -728,7 +751,7 @@ fun AirSyncMainScreen(
         val currentTab = tabs.getOrNull(pagerState.currentPage)
         if (currentTab != null) {
             val titleStr = context.getString(currentTab.title)
-            val title = if (titleStr == "Connect") "AirSync" else titleStr
+            val title = if (titleStr == "Connect") "H.I.B" else titleStr
             onTitleChange(title)
         }
     }
@@ -843,6 +866,46 @@ fun AirSyncMainScreen(
                                             onRemoteAction = { sendRemoteAction(it) }
                                         )
                                     }
+
+                                    // H.I.B: Play on Mac (phone audio through the Mac's speakers)
+                                    AnimatedVisibility(
+                                        visible = uiState.isConnected,
+                                        enter = expandVertically() + fadeIn(),
+                                        exit = shrinkVertically() + fadeOut()
+                                    ) {
+                                        com.sameerasw.airsync.presentation.ui.components.cards.PlayOnMacCard()
+                                    }
+
+                                    // H.I.B: Scenes the Mac marked "Show on phone"
+                                    AnimatedVisibility(
+                                        visible = uiState.isConnected,
+                                        enter = expandVertically() + fadeIn(),
+                                        exit = shrinkVertically() + fadeOut()
+                                    ) {
+                                        com.sameerasw.airsync.scenes.ScenesCard()
+                                    }
+
+                                    // H.I.B: Flick to Mac (pick photos/videos, flick them onto the Mac's desktop)
+                                    AnimatedVisibility(
+                                        visible = uiState.isConnected,
+                                        enter = expandVertically() + fadeIn(),
+                                        exit = shrinkVertically() + fadeOut()
+                                    ) {
+                                        com.sameerasw.airsync.presentation.ui.components.cards.FlickCard()
+                                    }
+
+                                    // H.I.B: Find my Mac (always visible; works nearby or over the internet)
+                                    com.sameerasw.airsync.findmy.FindMyMacCard()
+
+                                    // H.I.B: Desk Deck (phone on a stand becomes a control deck for the Mac)
+                                    AnimatedVisibility(
+                                        visible = uiState.isConnected,
+                                        enter = expandVertically() + fadeIn(),
+                                        exit = shrinkVertically() + fadeOut()
+                                    ) {
+                                        com.sameerasw.airsync.deskdeck.DeskDeckCard()
+                                    }
+
                                 }
 
                                 AnimatedVisibility(
@@ -1190,7 +1253,7 @@ fun AirSyncMainScreen(
                                     onSendMessage = { message -> sendMessage(message) },
                                     pendingExportJson = { json ->
                                         pendingExportJson = json
-                                        createDocLauncher.launch("airsync_settings_${System.currentTimeMillis()}.json")
+                                        createDocLauncher.launch("hib_settings_${System.currentTimeMillis()}.json")
                                     },
                                     onImport = { openDocLauncher.launch(arrayOf("application/json")) },
                                     onShowHelp = { showHelpSheet = true },
@@ -1247,7 +1310,7 @@ fun AirSyncMainScreen(
                                 onSendMessage = { message -> sendMessage(message) },
                                 pendingExportJson = { json ->
                                     pendingExportJson = json
-                                    createDocLauncher.launch("airsync_settings_${System.currentTimeMillis()}.json")
+                                    createDocLauncher.launch("hib_settings_${System.currentTimeMillis()}.json")
                                 },
                                 onImport = { openDocLauncher.launch(arrayOf("application/json")) },
                                 onShowHelp = { showHelpSheet = true },
@@ -1455,6 +1518,29 @@ fun AirSyncMainScreen(
                     viewModel.setOnboardingCompleted(true)
                 }
             )
+        }
+
+        if (iphoneScreenActive && showIphoneMirror) {
+            IPhoneMirrorOverlay(
+                frame = iphoneScreenFrame,
+                onDismiss = {
+                    showIphoneMirror = false
+                    iphoneViewerDismissed = true
+                }
+            )
+        } else if (iphoneScreenActive && iphoneScreenFrame != null) {
+            FilledTonalButton(
+                onClick = {
+                    iphoneViewerDismissed = false
+                    showIphoneMirror = true
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 18.dp)
+                    .zIndex(90f)
+            ) {
+                Text("Open iPhone Live View")
+            }
         }
     }
 }

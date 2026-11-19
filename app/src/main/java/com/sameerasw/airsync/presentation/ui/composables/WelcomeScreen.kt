@@ -229,19 +229,14 @@ fun WelcomeStepContent(
                 modifier = Modifier
                     .clip(RoundedCornerShape(100.dp))
                     .background(MaterialTheme.colorScheme.primaryContainer)
-                    .padding(8.dp)
-                    .clickable {
-                        val websiteUrl = "https://sameerasw.com"
-                        val intent = Intent(Intent.ACTION_VIEW, websiteUrl.toUri())
-                        context.startActivity(intent)
-                    },
+                    .padding(8.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.avatar),
-                    contentDescription = "Developer Avatar",
-                    contentScale = ContentScale.Crop,
+                    painter = painterResource(id = R.drawable.hibbit),
+                    contentDescription = "H.I.B mascot",
+                    contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .size(32.dp)
                         .clip(RoundedCornerShape(100.dp))
@@ -251,7 +246,7 @@ fun WelcomeStepContent(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
-                    text = stringResource(R.string.welcome_developer_attribution),
+                    text = stringResource(R.string.welcome_developer_attribution, stringResource(R.string.hib_maker_name)),
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.padding(end = 4.dp)
@@ -490,14 +485,6 @@ fun FeatureIntroStepContent(
             val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val isLargeScreen = configuration.screenWidthDp >= 600
 
-
-            GifItem(
-                modifier = Modifier.fillMaxWidth(),
-                imageLoader = imageLoader,
-                gifResId = R.drawable.airsync_scan
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
 
             Text(
                 text = stringResource(R.string.help_guides_title),

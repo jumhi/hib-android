@@ -64,6 +64,7 @@ class BleConnectionManager(private val context: Context) {
     private fun updateBleState(regularConnectionActive: Boolean, manuallyDisconnected: Boolean, isPaused: Boolean = false) {
         if (isPaused || !isBleEnabled) {
             Log.d(TAG, "BLE paused or disabled in settings, stopping/pausing server")
+            bleServer?.stopProximityBeacon()
             bleServer?.pauseAdvertising()
             if (isPaused) {
                 bleServer?.disconnectAllConnectedDevices()
@@ -75,9 +76,12 @@ class BleConnectionManager(private val context: Context) {
             // Regular Wi-Fi/USB connection is up — pause advertising to save power.
             Log.d(TAG, "Regular connection active — pausing BLE advertising")
             bleServer?.pauseAdvertising()
+            // Keep a low-power beacon up so the Mac's walk-away lock can still see this phone.
+            bleServer?.startProximityBeacon()
         } else {
             // No regular connection — ensure server is started and advertising so devices can discover and connect
             Log.d(TAG, "No regular connection — resuming BLE advertising")
+            bleServer?.stopProximityBeacon()
             bleServer?.start()
             bleServer?.resumeAdvertising()
         }

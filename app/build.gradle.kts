@@ -14,8 +14,8 @@ android {
     defaultConfig {
         applicationId = "com.sameerasw.airsync"
         minSdk = 30
-        versionCode = 32
-        versionName = "4.0.1"
+        versionCode = 33
+        versionName = "4.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -80,6 +80,9 @@ dependencies {
 
     // Material Components (XML themes: Theme.Material3.*)
     implementation("com.google.android.material:material:1.12.0")
+
+    // H.I.B: Touch ID on Phone (BiometricPrompt for Mac approvals)
+    implementation("androidx.biometric:biometric:1.1.0")
 
     // Android 12+ SplashScreen API with backward compatibility attributes
     implementation("androidx.core:core-splashscreen:1.0.1")

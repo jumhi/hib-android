@@ -55,6 +55,7 @@ object WebSocketUtil {
     // Transport state: true after OkHttp onOpen, false after closing/failure/disconnect
     private val isSocketOpen = AtomicBoolean(false)
     private val handshakeCompleted = AtomicBoolean(false)
+    private val authenticationFailed = AtomicBoolean(false)
     private val connectionStarted = AtomicBoolean(false)
     private val failedAttempts = java.util.concurrent.atomic.AtomicInteger(0)
 
@@ -133,6 +134,7 @@ object WebSocketUtil {
         // If user initiates a manual attempt, stop any auto-reconnect loop
         if (manualAttempt) {
             cancelAutoReconnect()
+            authenticationFailed.set(false)
         }
 
         // Validate local network IP
@@ -309,13 +311,31 @@ object WebSocketUtil {
                             }
 
                             override fun onMessage(webSocket: WebSocket, text: String) {
-                                Log.d(TAG, "RAW WebSocket message received: ${text}...")
+                                Log.d(TAG, "Encrypted WebSocket message received (${text.length} characters)")
                                 val decryptedMessage = currentSymmetricKey?.let { key ->
                                     val decrypted = CryptoUtil.decryptMessage(text, key)
-                                    if (decrypted == null) Log.e(
-                                        TAG,
-                                        "FAILED TO DECRYPT WebSocket message!"
-                                    )
+                                    if (decrypted == null) {
+                                        Log.e(TAG, "Pairing authentication failed: the saved key does not match this Mac")
+                                        authenticationFailed.set(true)
+                                        cancelAutoReconnect()
+                                        updateConnectedStatus(false)
+                                        isConnecting.set(false)
+                                        handshakeTimeoutJob?.cancel()
+                                        onConnectionStatusChanged?.invoke(false)
+                                        notifyConnectionStatusListeners(false)
+                                        onHandshakeTimeout?.invoke()
+                                        if (com.sameerasw.airsync.AirSyncApp.isAppForeground()) {
+                                            CoroutineScope(Dispatchers.Main).launch {
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "Pairing expired. Scan the H.I.B QR code on your Mac again.",
+                                                    android.widget.Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                        }
+                                        webSocket.close(4003, "Pairing key mismatch")
+                                        return
+                                    }
                                     decrypted
                                 } ?: text
 
@@ -356,6 +376,7 @@ object WebSocketUtil {
                                          }
                                         try {
                                             SyncManager.startPeriodicSync(context)
+                                            SyncManager.checkAndSyncDeviceStatus(context, forceSync = true)
                                         } catch (_: Exception) {
                                         }
 
@@ -402,6 +423,7 @@ object WebSocketUtil {
                                     handshakeCompleted.set(false)
                                     handshakeTimeoutJob?.cancel()
                                     currentIpAddress = null
+                                    IPhoneScreenMirrorManager.clear()
                                     try {
                                         ServiceManager.updateServiceState(context)
                                     } catch (_: Exception) {
@@ -419,7 +441,8 @@ object WebSocketUtil {
                                     notifyConnectionStatusListeners(false)
 
                                     // Only auto-reconnect if it wasn't a manual close
-                                    if (code != 1000 || reason != "Manual disconnection") {
+                                    if (!authenticationFailed.get() &&
+                                        (code != 1000 || reason != "Manual disconnection")) {
                                         tryStartAutoReconnect(context)
                                     }
 
@@ -446,15 +469,15 @@ object WebSocketUtil {
                                         if (com.sameerasw.airsync.AirSyncApp.isAppForeground()) {
                                             CoroutineScope(Dispatchers.Main).launch {
                                                 val msg = when (t) {
-                                                    is java.net.ConnectException -> "Connection Refused (Is AirSync Mac running?)"
-                                                    is java.net.SocketTimeoutException -> "Could not discover your mac"
-                                                    is java.net.UnknownHostException -> "Could not reach your mac"
-                                                    is java.io.EOFException, is java.net.SocketException -> "Lost connection to your mac"
+                                                    is java.net.ConnectException -> "Connection refused (is H.I.B open on the paired device?)"
+                                                    is java.net.SocketTimeoutException -> "Could not discover the paired device"
+                                                    is java.net.UnknownHostException -> "Could not reach the paired device"
+                                                    is java.io.EOFException, is java.net.SocketException -> "Lost connection to the paired device"
                                                     else -> t.message ?: "Unknown connection error"
                                                 }
                                                 android.widget.Toast.makeText(
                                                     context,
-                                                    "AirSync: $msg",
+                                                    "H.I.B: $msg",
                                                     android.widget.Toast.LENGTH_LONG
                                                 ).show()
                                             }
@@ -463,6 +486,7 @@ object WebSocketUtil {
                                     updateConnectedStatus(false)
                                     isConnecting.set(false)
                                     isSocketOpen.set(false)
+                                    IPhoneScreenMirrorManager.clear()
                                     handshakeCompleted.set(false)
                                     handshakeTimeoutJob?.cancel()
                                     connectionAttemptJob?.cancel()
@@ -491,11 +515,13 @@ object WebSocketUtil {
                                                     context
                                                 )
                                             val manual = ds.getUserManuallyDisconnected().first()
-                                            if (!manual) {
+                                            if (!manual && !authenticationFailed.get()) {
                                                 tryStartAutoReconnect(context)
                                             }
                                         } catch (_: Exception) {
-                                            tryStartAutoReconnect(context)
+                                            if (!authenticationFailed.get()) {
+                                                tryStartAutoReconnect(context)
+                                            }
                                         }
                                     }
 
@@ -574,7 +600,11 @@ object WebSocketUtil {
     fun sendMessage(message: String): Boolean {
         // Allow sending as soon as the socket is open (even before handshake completes)
         if (isSocketOpen.get() && webSocket != null) {
-            Log.d(TAG, "Sending message via WebSocket: $message")
+            // Read the type from the head of the message instead of parsing the whole
+            // (possibly multi-MB) payload just for a log line.
+            val messageType = Regex("\"type\"\\s*:\\s*\"([^\"]+)\"")
+                .find(message.take(128))?.groupValues?.get(1) ?: "unknown"
+            Log.d(TAG, "Sending $messageType via WebSocket (${message.length} characters)")
             val messageToSend = currentSymmetricKey?.let { key ->
                 CryptoUtil.encryptMessage(message, key)
             } ?: message
@@ -905,6 +935,10 @@ object WebSocketUtil {
      * Uses a dual strategy: proactive exponential backoff AND discovery-triggered.
      */
     private fun tryStartAutoReconnect(context: Context) {
+        if (authenticationFailed.get()) {
+            Log.d(TAG, "Auto-reconnect paused until the device is paired again")
+            return
+        }
         if (autoReconnectActive.get()) return // already running
         autoReconnectActive.set(true)
         autoReconnectStartTime = System.currentTimeMillis()

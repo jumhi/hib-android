@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.sameerasw.airsync.MainActivity
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
@@ -110,11 +111,25 @@ class QRScannerActivity : ComponentActivity() {
             AirSyncTheme(pitchBlackTheme = uiState.isPitchBlackThemeEnabled) {
                 QRScannerScreen(
                     onQrScanned = { qrData ->
-                        // Return the scanned QR code data to the caller
-                        val intent = Intent().apply {
-                            putExtra("QR_CODE", qrData)
+                        if (callingActivity == null) {
+                            // The scanner can be launched from a shortcut, ADB, or another
+                            // app without an ActivityResult caller. Route a valid H.I.B QR
+                            // directly through MainActivity so the key is actually persisted.
+                            val uri = android.net.Uri.parse(qrData)
+                            if (uri.scheme == "airsync") {
+                                startActivity(Intent(this@QRScannerActivity, MainActivity::class.java).apply {
+                                    data = uri
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                })
+                            } else {
+                                Log.w("QrScanner", "Rejected QR code with an unsupported scheme")
+                            }
+                        } else {
+                            val resultIntent = Intent().apply {
+                                putExtra("QR_CODE", qrData)
+                            }
+                            setResult(RESULT_OK, resultIntent)
                         }
-                        setResult(RESULT_OK, intent)
                         finish()
                     },
                     onClosed = {
@@ -167,7 +182,7 @@ private fun QRScannerScreen(
                     lastScannedCode = qrData
                     scanned = true
                     scanMessage = "QR Code detected!"
-                    Log.d("QrScanner", "QR detected in screen: $qrData")
+                    Log.d("QrScanner", "H.I.B QR code detected (${qrData.length} characters)")
 
                     // Trigger 3-step haptic feedback on successful scan
                     HapticUtil.performSuccess(haptics)
@@ -277,7 +292,7 @@ fun QrCodeScannerView(
                             if (result != lastScanned && result.isNotEmpty()) {
                                 lastScanned = result
                                 onActiveScanningChanged(true)
-                                Log.d("QrScanner", "QR scanned, calling callback with: $result")
+                                Log.d("QrScanner", "QR scanned; delivering ${result.length} characters")
                                 onQrScanned(result)
                             }
                         }

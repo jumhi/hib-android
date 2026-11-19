@@ -112,6 +112,7 @@ class BleGattServer(private val context: Context) {
      */
     fun stop() {
         stopAdvertising()
+        stopProximityBeacon()
         stopHeartbeat()
         gattServer?.clearServices()
         gattServer?.close()
@@ -235,6 +236,63 @@ class BleGattServer(private val context: Context) {
         val callback = currentAdvertiseCallback ?: return
         adapter.bluetoothLeAdvertiser?.stopAdvertising(callback)
         currentAdvertiseCallback = null
+    }
+
+    private var proximityBeaconCallback: AdvertiseCallback? = null
+
+    /**
+     * H.I.B walk-away lock: advertise a tiny non-connectable beacon (about once a second) so
+     * the Mac can read this phone's signal strength while the regular link is Wi-Fi.
+     * Safe to call repeatedly.
+     */
+    @SuppressLint("MissingPermission")
+    fun startProximityBeacon() {
+        if (proximityBeaconCallback != null) return
+        if (!com.sameerasw.airsync.utils.PermissionUtil.isBluetoothPermissionsGranted(context)) return
+        if (adapter == null || !adapter.isEnabled) return
+        val advertiser = adapter.bluetoothLeAdvertiser ?: return
+
+        val settings = AdvertiseSettings.Builder()
+            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_POWER)
+            .setConnectable(false)
+            .setTimeout(0)
+            // Same TX power as the normal advertisement so the Mac's thresholds stay consistent.
+            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
+            .build()
+        val data = AdvertiseData.Builder()
+            .setIncludeDeviceName(false)
+            .addServiceUuid(ParcelUuid(BleConstants.SERVICE_PROXIMITY_BEACON))
+            .build()
+        val callback = object : AdvertiseCallback() {
+            override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
+                Log.d(TAG, "Proximity beacon started")
+            }
+
+            override fun onStartFailure(errorCode: Int) {
+                if (errorCode != ADVERTISE_FAILED_ALREADY_STARTED) {
+                    Log.w(TAG, "Proximity beacon failed: $errorCode")
+                    proximityBeaconCallback = null
+                }
+            }
+        }
+        proximityBeaconCallback = callback
+        try {
+            advertiser.startAdvertising(settings, data, callback)
+        } catch (e: Exception) {
+            Log.w(TAG, "Proximity beacon start error: ${e.message}")
+            proximityBeaconCallback = null
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun stopProximityBeacon() {
+        val callback = proximityBeaconCallback ?: return
+        proximityBeaconCallback = null
+        try {
+            adapter?.bluetoothLeAdvertiser?.stopAdvertising(callback)
+        } catch (e: Exception) {
+            Log.w(TAG, "Proximity beacon stop error: ${e.message}")
+        }
     }
 
     /**

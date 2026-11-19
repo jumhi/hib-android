@@ -93,7 +93,7 @@
                 android:id="@+id/widget_device_name"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="AirSync"
+                android:text="H.I.B"
                 android:textColor="@color/widget_primary_text"
                 android:textSize="16sp"
                 android:textStyle="bold" />

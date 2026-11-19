@@ -229,6 +229,12 @@ object SyncManager {
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         delay(1500)
+                        // Wallpaper and other large metadata are only needed after the Mac has
+                        // authenticated and answered the lightweight handshake.
+                        if (!WebSocketUtil.isWifiConnected()) {
+                            Log.d(TAG, "Skipping full device info until handshake completes")
+                            return@launch
+                        }
                         val wallpaperBase64 = try {
                             WallpaperUtil.getWallpaperAsBase64(context)
                         } catch (_: Exception) {
@@ -262,19 +268,8 @@ object SyncManager {
                     }
                 }
 
-                delay(150)
-
-                // 2. Send device status (respect now playing setting)
-                val includeNowPlaying = dataStoreManager.getSendNowPlayingEnabled().first()
-                val statusJson = DeviceInfoUtil.generateDeviceStatusJson(context)
-                if (WebSocketUtil.sendMessage(statusJson)) {
-                    Log.d(TAG, "Device status sent")
-                    // Update cache
-                    lastAudioInfo = DeviceInfoUtil.getAudioInfo(context, includeNowPlaying)
-                    lastBatteryInfo = DeviceInfoUtil.getBatteryInfo(context)
-                } else {
-                    Log.e(TAG, "Failed to send device status")
-                }
+                // 2. Device status and wallpaper are sent only after macInfo authenticates
+                // the peer. This keeps media metadata out of unauthenticated sessions.
 
                 // 3. Defer icon sync to macInfo handler to avoid unnecessary extraction
                 Log.d(

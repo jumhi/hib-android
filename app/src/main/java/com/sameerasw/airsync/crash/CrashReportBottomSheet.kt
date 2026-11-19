@@ -96,16 +96,6 @@ fun CrashReportBottomSheet(
                         }
                     )
 
-                    // Open GitHub issue
-                    IconToggleItem(
-                        title = stringResource(R.string.crash_github),
-                        description = stringResource(R.string.crash_github_desc),
-                        iconRes = R.drawable.brand_github,
-                        showToggle = false,
-                        onClick = {
-                            openGitHubIssue(context, report)
-                        }
-                    )
                 }
             }
 
@@ -119,7 +109,7 @@ fun CrashReportBottomSheet(
 private fun copyToClipboard(context: Context, text: String) {
     try {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        val clip = android.content.ClipData.newPlainText("AirSync Crash Report", text)
+        val clip = android.content.ClipData.newPlainText("H.I.B Crash Report", text)
         clipboard.setPrimaryClip(clip)
         Toast.makeText(context, "Report copied to clipboard", Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
@@ -129,7 +119,7 @@ private fun copyToClipboard(context: Context, text: String) {
 
 private fun saveLogToFile(context: Context, text: String, showToast: Boolean): Uri? {
     try {
-        val filename = "airsync_crash_${System.currentTimeMillis()}.log"
+        val filename = "hib_crash_${System.currentTimeMillis()}.log"
         val resolver = context.contentResolver
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
@@ -159,28 +149,14 @@ private fun saveLogToFile(context: Context, text: String, showToast: Boolean): U
 
 private fun emailReport(context: Context, text: String) {
     try {
-        val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
-            data = Uri.parse("mailto:mail@sameerasw.com")
-            putExtra(Intent.EXTRA_SUBJECT, "AirSync Android Crash Report")
+        val emailIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "H.I.B Android Crash Report")
             val bodyText = if (text.length > 4000) text.substring(0, 4000) + "\n...[truncated]" else text
             putExtra(Intent.EXTRA_TEXT, bodyText)
         }
         context.startActivity(Intent.createChooser(emailIntent, "Send Email"))
     } catch (e: Exception) {
         Toast.makeText(context, "No email client found", Toast.LENGTH_SHORT).show()
-    }
-}
-
-private fun openGitHubIssue(context: Context, text: String) {
-    try {
-        val uri = saveLogToFile(context, text, showToast = false)
-        if (uri != null) {
-            Toast.makeText(context, context.getString(R.string.crash_github_hint), Toast.LENGTH_LONG).show()
-        }
-        val url = "https://github.com/sameerasw/airsync-android/issues/new"
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show()
     }
 }

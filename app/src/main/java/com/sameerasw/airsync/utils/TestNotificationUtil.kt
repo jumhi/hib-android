@@ -77,7 +77,7 @@ object TestNotificationUtil {
                 "Actions"
             ),
             sampleBodies = listOf(
-                "New pull request in airsync-android",
+                "New pull request in hib-android",
                 "Issue #42 has been updated",
                 "Workflow run completed successfully",
                 "Security vulnerability detected",
@@ -94,7 +94,7 @@ object TestNotificationUtil {
                 "team@company.com",
                 "noreply@github.com",
                 "Google",
-                "Amazon",
+                "H.I.B",
                 "Netflix",
                 "PayPal",
                 "LinkedIn",

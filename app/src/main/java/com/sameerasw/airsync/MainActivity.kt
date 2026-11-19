@@ -566,6 +566,13 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
 
+        // Recreate the Compose state when a pairing deep link is delivered to an existing
+        // MainActivity. onCreate parses and persists the new address and symmetric key.
+        if (intent?.data?.scheme == "airsync") {
+            recreate()
+            return
+        }
+
         // Handle Notes Role intent
         handleNotesRoleIntent(intent)
 

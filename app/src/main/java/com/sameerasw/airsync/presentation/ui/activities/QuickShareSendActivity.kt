@@ -304,7 +304,7 @@ private fun QuickShareSendScreenPreviewLoading() {
             hasWindowFocus = true,
             uris = emptyList(),
             sharedText = null,
-            pairedDeviceName = "Sameera's Mac",
+            pairedDeviceName = "Haitham's Mac",
             onFinished = {}
         )
     }

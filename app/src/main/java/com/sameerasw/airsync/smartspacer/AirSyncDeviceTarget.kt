@@ -124,7 +124,7 @@ class AirSyncDeviceTarget : SmartspacerTargetProvider() {
 
     override fun getConfig(smartspacerId: String?): Config {
         return Config(
-            label = "AirSync Device",
+            label = "H.I.B Device",
             description = "Shows your connected Mac device status",
             icon = Icon.createWithResource(provideContext(), R.drawable.ic_laptop_24),
             allowAddingMoreThanOnce = false,

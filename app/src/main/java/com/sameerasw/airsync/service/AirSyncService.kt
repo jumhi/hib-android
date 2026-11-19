@@ -25,6 +25,7 @@ import com.sameerasw.airsync.utils.ShortcutUtil
 import com.sameerasw.airsync.utils.discovery.DiscoveryOrchestrator
 import com.sameerasw.airsync.utils.WebDavServer
 import com.sameerasw.airsync.utils.WebSocketUtil
+import com.sameerasw.airsync.utils.ScreenshotClipboardMonitor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -67,6 +68,7 @@ class AirSyncService : Service() {
         MacDeviceStatusManager.startMonitoring(this)
         registerNetworkCallback()
         WebSocketUtil.registerConnectionStatusListener(connectionStatusListener)
+        com.sameerasw.airsync.findmy.FindMyRelayClient.attach(this) // H.I.B Find My internet relay
 
         val dataStoreManager = DataStoreManager.getInstance(applicationContext)
         scope.launch {
@@ -239,6 +241,13 @@ class AirSyncService : Service() {
 
             WakeupService.startService(this@AirSyncService)
             monitorWebDavRequirements()
+            if (dataStoreManager.getClipboardSyncEnabled().first()) {
+                ScreenshotClipboardMonitor.start(this@AirSyncService)
+                // Text copy -> Mac must keep working after the user leaves H.I.B, so the clipboard
+                // watcher lives with this foreground service, not with the main screen.
+                // (Background reads rely on the READ_CLIPBOARD app-op, which the Mac grants over ADB.)
+                com.sameerasw.airsync.utils.ClipboardSyncManager.startSync(this@AirSyncService)
+            }
         }
     }
 
@@ -247,6 +256,8 @@ class AirSyncService : Service() {
         webDavJob?.cancel()
         webDavJob = null
         stopWebDavServer()
+        ScreenshotClipboardMonitor.stop(this)
+        com.sameerasw.airsync.utils.ClipboardSyncManager.stopSync(this)
         ShortcutUtil.refreshShortcuts(this, false)
         DiscoveryOrchestrator.stop(this)
         WakeupService.stopService(this)
@@ -290,10 +301,10 @@ class AirSyncService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "AirSync Status",
+                "H.I.B Status",
                 NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "Shows AirSync connection and discovery status"
+                description = "Shows H.I.B connection and discovery status"
                 setShowBadge(false)
             }
             val notificationManager = getSystemService(NotificationManager::class.java)
@@ -379,8 +390,11 @@ class AirSyncService : Service() {
 
     override fun onDestroy() {
         Log.d(TAG, "AirSyncService destroyed")
+        ScreenshotClipboardMonitor.stop(this)
+        com.sameerasw.airsync.utils.ClipboardSyncManager.stopSync(this)
         serviceInstance = null
         WebSocketUtil.unregisterConnectionStatusListener(connectionStatusListener)
+        com.sameerasw.airsync.findmy.FindMyRelayClient.detach()
 
         networkCallback?.let {
             try {

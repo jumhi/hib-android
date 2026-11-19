@@ -9,14 +9,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 object ClipboardSyncManager {
     private const val TAG = "ClipboardSyncManager"
 
     private var clipboardListener: ClipboardManager.OnPrimaryClipChangedListener? = null
-    private var isEnabled = false
-    private var lastSentText: String? = null
-    private var lastReceivedText: String? = null
+    private val isEnabled = AtomicBoolean(false)
+    private val listenerLock = Any()
+    @Volatile private var lastSentText: String? = null
+    @Volatile private var lastReceivedText: String? = null
     private var syncJob: Job? = null
     private val syncScope = CoroutineScope(Dispatchers.IO)
 
@@ -31,7 +33,9 @@ object ClipboardSyncManager {
      * Start clipboard sync
      */
     fun startSync(context: Context) {
-        if (isEnabled) {
+        // Claim the "enabled" slot before launching, so a quick stopSync() can't race
+        // the async setup and a second startSync() can't register a duplicate listener.
+        if (!isEnabled.compareAndSet(false, true)) {
             Log.d(TAG, "Clipboard sync already enabled")
             return
         }
@@ -43,13 +47,23 @@ object ClipboardSyncManager {
 
                 if (!isClipboardSyncEnabled) {
                     Log.d(TAG, "Clipboard sync is disabled in settings")
+                    isEnabled.set(false)
                     return@launch
                 }
 
-                // Clipboard monitoring disabled - only sync via manual share method
-                isEnabled = true
-                Log.d(TAG, "Clipboard sync started (share method only)")
+                synchronized(listenerLock) {
+                if (!isEnabled.get()) return@launch
+                clipboardListener = ClipboardUtil.registerClipboardListener(context.applicationContext) { text ->
+                    if (text == lastReceivedText) {
+                        lastReceivedText = null
+                    } else if (text != lastSentText) {
+                        syncClipboardToDesktop(text)
+                    }
+                }
+                }
+                Log.d(TAG, "Universal text clipboard listener started")
             } catch (e: Exception) {
+                isEnabled.set(false)
                 Log.e(TAG, "Error starting clipboard sync: ${e.message}")
             }
         }
@@ -59,15 +73,14 @@ object ClipboardSyncManager {
      * Stop clipboard sync
      */
     fun stopSync(context: Context) {
-        if (!isEnabled) return
-
-        clipboardListener?.let { listener ->
-            ClipboardUtil.unregisterClipboardListener(context, listener)
-            clipboardListener = null
-        }
-
+        isEnabled.set(false)
         syncJob?.cancel()
-        isEnabled = false
+        synchronized(listenerLock) {
+            clipboardListener?.let { listener ->
+                ClipboardUtil.unregisterClipboardListener(context.applicationContext, listener)
+                clipboardListener = null
+            }
+        }
         Log.d(TAG, "Clipboard sync stopped")
     }
 
@@ -82,11 +95,11 @@ object ClipboardSyncManager {
                 lastSentText = text
                 val clipboardJson = JsonUtil.createClipboardUpdateJson(text)
 
-                Log.d(TAG, "Sending clipboard JSON: $clipboardJson")
+                Log.d(TAG, "Sending clipboard text (${text.length} characters)")
 
                 val success = WebSocketUtil.sendMessage(clipboardJson)
                 if (success) {
-                    Log.d(TAG, "Clipboard synced to desktop: ${text.take(50)}...")
+                    Log.d(TAG, "Clipboard text synced to desktop")
                     // Notify callback about sent clipboard
                     onClipboardSent?.invoke(text)
                 } else {
@@ -150,11 +163,13 @@ object ClipboardSyncManager {
     fun handleClipboardUpdate(context: Context, text: String) {
         try {
             lastReceivedText = text
+            // The Mac now owns the clipboard; re-copying something we sent earlier must sync again.
+            lastSentText = null
 
             // Always update clipboard with the full received text
             val updated = ClipboardUtil.setClipboardText(context, text)
             if (updated) {
-                Log.d(TAG, "Clipboard updated from desktop: ${text.take(200)}")
+                Log.d(TAG, "Clipboard updated from desktop (${text.length} characters)")
             } else {
                 Log.w(TAG, "Failed to update clipboard from desktop")
             }
@@ -192,7 +207,7 @@ object ClipboardSyncManager {
 
             val success = WebSocketUtil.sendMessage(clipboardJson)
             if (success) {
-                Log.d(TAG, "Text shared to desktop: ${text.take(50)}...")
+                Log.d(TAG, "Text shared to desktop (${text.length} characters)")
                 // Notify callback about sent clipboard
                 onClipboardSent?.invoke(text)
             } else {

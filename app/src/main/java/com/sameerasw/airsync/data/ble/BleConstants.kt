@@ -11,6 +11,10 @@ object BleConstants {
     val SERVICE_MEDIA = UUID.fromString("a1520003$UUID_BASE")
     val SERVICE_CLIPBOARD = UUID.fromString("a1520004$UUID_BASE")
 
+    // H.I.B walk-away lock: low-power, non-connectable beacon advertised while the regular
+    // Wi-Fi link is up (normal advertising is paused then) so the Mac can measure proximity.
+    val SERVICE_PROXIMITY_BEACON = UUID.fromString("a15200f0$UUID_BASE")
+
     // System Characteristics
     val CHAR_PROTOCOL_VERSION = UUID.fromString("a1520101$UUID_BASE")
     val CHAR_AUTH_TOKEN = UUID.fromString("a1520102$UUID_BASE")

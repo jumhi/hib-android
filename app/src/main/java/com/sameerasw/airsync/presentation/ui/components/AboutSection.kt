@@ -58,9 +58,9 @@ fun AboutSection(
     modifier: Modifier = Modifier,
     onAvatarLongClick: () -> Unit = {},
     onAvatarLongClickWithPosition: ((Offset) -> Unit)? = null,
-    appName: String = "AirSync",
-    developerName: String = "Sameera Wijerathna",
-    description: String = "AirSync enables seamless synchronization between your Android device and Mac. Share notifications, clipboard content, and device status wirelessly over your local network."
+    appName: String = "H.I.B",
+    developerName: String = stringResource(R.string.hib_maker_name),
+    description: String = "H.I.B enables seamless synchronization between your Android device and Mac. Share notifications, clipboard content, and device status wirelessly over your local network."
 ) {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
@@ -127,9 +127,9 @@ fun AboutSection(
                     )
                 } else {
                     Image(
-                        painter = painterResource(id = R.drawable.avatar),
-                        contentDescription = "Developer Avatar",
-                        contentScale = ContentScale.Crop,
+                        painter = painterResource(id = R.drawable.hibbit),
+                        contentDescription = "H.I.B mascot",
+                        contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .size(120.dp)
                             .onGloballyPositioned { coords ->
@@ -154,130 +154,28 @@ fun AboutSection(
             }
 
             Text(
-                text = "Developed by $developerName",
+                text = "Made by $developerName",
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center
             )
 
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                maxItemsInEachRow = 3
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
             ) {
-                ActionButton(
-                    text = "Website",
-                    iconRes = R.drawable.rounded_web_traffic_24,
-                    onClick = { openUrl(context, "https://www.sameerasw.com/airsync") }
-                )
-                ActionButton(
-                    text = "Help",
-                    iconRes = R.drawable.rounded_info_24,
-                    onClick = { openUrl(context, "https://airsync.notion.site") }
-                )
-                ActionButton(
-                    text = "GitHub",
-                    iconRes = R.drawable.brand_github,
-                    onClick = { openUrl(context, "https://github.com/sameerasw/airsync-android") }
-                )
-                ActionButton(
-                    text = "Telegram",
-                    iconRes = R.drawable.brand_telegram,
-                    onClick = { openUrl(context, "https://t.me/tidwib") },
-                    outlined = true
-                )
-                ActionButton(
-                    text = "Support",
-                    iconRes = R.drawable.rounded_heart_smile_24,
-                    onClick = { openUrl(context, "https://buymeacoffee.com/sameerasw") },
-                    outlined = true
-                )
-                ActionButton(
-                    text = "AirSync+",
-                    iconRes = R.drawable.rounded_devices_24,
-                    onClick = { openUrl(context, "https://store.sameerasw.com") },
-                    outlined = true
-                )
-            }
-
-            val creditText = stringResource(id = R.string.label_app_icon_credits)
-            val annotatedString = buildAnnotatedString {
-                append(creditText)
-                val startIndex = creditText.indexOf("@Syntrop2k2")
-                val endIndex = startIndex + "@Syntrop2k2".length
-                if (startIndex != -1) {
-                    addStringAnnotation(
-                        tag = "URL",
-                        annotation = stringResource(id = R.string.url_syntrop_telegram),
-                        start = startIndex,
-                        end = endIndex
-                    )
-                    addStyle(
-                        style = SpanStyle(
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            textDecoration = TextDecoration.Underline
-                        ),
-                        start = startIndex,
-                        end = endIndex
+                Column(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("H.I.B — Haitham Is Bored", fontWeight = FontWeight.Bold)
+                    Text(
+                        "A private Galaxy + Mac ecosystem for notifications, files, links, text, and screenshots.",
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-
-            ClickableText(
-                text = annotatedString,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                onClick = { offset ->
-                    annotatedString.getStringAnnotations(tag = "URL", start = offset, end = offset)
-                        .firstOrNull()?.let { annotation ->
-                            openUrl(context, annotation.item)
-                        }
-                }
-            )
-
-            Text(
-                text = "Other Apps",
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center
-            )
-
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                maxItemsInEachRow = 3
-            ) {
-                OtherAppButton(
-                    text = "Essentials",
-                    iconRes = R.drawable.essentials_icon,
-                    onClick = { openUrl(context, "https://github.com/sameerasw/essentials") }
-                )
-                OtherAppButton(
-                    text = "ZenZero",
-                    iconRes = R.drawable.rounded_web_24,
-                    onClick = { openUrl(context, "https://sameerasw.com/zen") }
-                )
-                OtherAppButton(
-                    text = "Canvas",
-                    iconRes = R.drawable.rounded_draw_24,
-                    onClick = { openUrl(context, "https://github.com/sameerasw/canvas") }
-                )
-                OtherAppButton(
-                    text = "Tasks",
-                    iconRes = R.drawable.rounded_task_alt_24,
-                    onClick = { openUrl(context, "https://github.com/sameerasw/tasks") }
-                )
-            }
-
-            Text(
-                text = "With ❤️ from 🇱🇰",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

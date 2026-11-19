@@ -90,7 +90,7 @@ fun ConnectionStatusCard(
                 val previewRes = DevicePreviewResolver.getPreviewRes(connectedDevice)
                 Image(
                     painter = painterResource(id = previewRes),
-                    contentDescription = "Connected Mac preview",
+                    contentDescription = "Connected device preview",
                     modifier = Modifier.fillMaxWidth(0.75f),
                     contentScale = ContentScale.Fit,
                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.primary)

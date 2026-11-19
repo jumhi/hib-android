@@ -125,7 +125,7 @@ class AirSyncWidgetProvider : AppWidgetProvider() {
             // Apply both view alpha and image alpha for broader device compatibility
             views.setFloat(R.id.widget_device_image, "setAlpha", alphaFloat)
             views.setInt(R.id.widget_device_image, "setImageAlpha", alphaInt)
-            views.setTextViewText(R.id.widget_device_name, lastDevice?.name ?: "AirSync")
+            views.setTextViewText(R.id.widget_device_name, lastDevice?.name ?: "H.I.B")
 
             // Read persisted Mac status snapshot
             val macStatus =

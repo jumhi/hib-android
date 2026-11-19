@@ -206,7 +206,7 @@ class AirSyncTileService : TileService() {
                 if (isPaused) {
                     icon = Icon.createWithResource(this@AirSyncTileService, R.drawable.rounded_devices_off_24)
                     state = Tile.STATE_INACTIVE
-                    label = "AirSync"
+                    label = "H.I.B"
                     subtitle = getString(R.string.paused)
                 } else {
                     val dynamicIcon =
@@ -246,7 +246,7 @@ class AirSyncTileService : TileService() {
                     } else {
                         // No last device
                         state = Tile.STATE_INACTIVE
-                        label = "AirSync"
+                        label = "H.I.B"
                         subtitle = "Tap to setup"
                     }
                 }
@@ -259,7 +259,7 @@ class AirSyncTileService : TileService() {
             // Fallback state
             qsTile?.apply {
                 state = Tile.STATE_INACTIVE
-                label = "AirSync"
+                label = "H.I.B"
                 subtitle = "Error"
                 val dynamicIcon =
                     com.sameerasw.airsync.utils.DeviceIconResolver.getTileIconRes(null)

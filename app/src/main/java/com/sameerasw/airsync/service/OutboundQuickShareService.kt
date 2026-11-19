@@ -27,7 +27,7 @@ import java.net.Socket
 
 /**
  * Foreground service that sends one or more files to the paired Mac via Quick Share, initiated
- * from within the AirSync app (share-sheet target) rather than Android's system Quick Share.
+ * from within the H.I.B app (share-sheet target) rather than Android's system Quick Share.
  * Mirrors QuickShareService's structure, but drives OutboundQuickShareConnection instead.
  */
 class OutboundQuickShareService : Service() {
@@ -293,7 +293,7 @@ class OutboundQuickShareService : Service() {
 
     private fun createNotification(content: String): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Sending via AirSync")
+            .setContentTitle("Sending via H.I.B")
             .setContentText(content)
             .setSmallIcon(R.drawable.ic_laptop_24)
             .setOngoing(true)
