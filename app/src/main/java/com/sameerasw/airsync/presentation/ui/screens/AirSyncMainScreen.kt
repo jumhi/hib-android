@@ -885,6 +885,15 @@ fun AirSyncMainScreen(
                                         com.sameerasw.airsync.scenes.ScenesCard()
                                     }
 
+                                    // H.I.B: Do Not Disturb access prompt (hidden once granted)
+                                    AnimatedVisibility(
+                                        visible = uiState.isConnected,
+                                        enter = expandVertically() + fadeIn(),
+                                        exit = shrinkVertically() + fadeOut()
+                                    ) {
+                                        com.sameerasw.airsync.scenes.DndAccessPrompt()
+                                    }
+
                                     // H.I.B: Flick to Mac (pick photos/videos, flick them onto the Mac's desktop)
                                     AnimatedVisibility(
                                         visible = uiState.isConnected,

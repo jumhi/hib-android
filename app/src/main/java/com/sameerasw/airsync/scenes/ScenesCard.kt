@@ -175,10 +175,17 @@ fun ScenesPermissionRow(permission: String) {
                     when (permission) {
                         ScenesPermissions.DND -> {
                             try {
-                                context.startActivity(
-                                    Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                )
+                                val direct = Intent("android.settings.NOTIFICATION_POLICY_ACCESS_DETAIL_SETTINGS")
+                                    .setData(Uri.parse("package:${context.packageName}"))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                if (android.os.Build.VERSION.SDK_INT < 35 ||
+                                    runCatching { context.startActivity(direct) }.isFailure
+                                ) {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }
                             } catch (e: Exception) {
                                 openAppSettings(context)
                             }
