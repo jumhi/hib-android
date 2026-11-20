@@ -121,6 +121,16 @@ import kotlin.math.max
  */
 class FlickActivity : ComponentActivity() {
 
+    override fun onResume() {
+        super.onResume()
+        com.sameerasw.airsync.utils.FlickAim.start(this)
+    }
+
+    override fun onPause() {
+        com.sameerasw.airsync.utils.FlickAim.stop()
+        super.onPause()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(

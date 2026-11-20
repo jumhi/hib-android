@@ -89,6 +89,11 @@ object FlickSender {
             put("angle", angle.toDouble())
             if (!thumbnailBase64.isNullOrEmpty()) put("thumbnail", thumbnailBase64)
             if (text != null) put("text", text.take(MAX_TEXT_CHARS))
+            // Where the phone is pointing, so a Mac with several screens can pick one.
+            FlickAim.current()?.let { (heading, elevation) ->
+                put("heading", heading.toDouble())
+                put("elevation", elevation.toDouble())
+            }
         }
         val msg = JSONObject().apply {
             put("type", "flickStart")
