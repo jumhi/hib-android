@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.sameerasw.airsync.R
+import com.sameerasw.airsync.presentation.ui.components.cards.MirroringSetupCard
 import com.sameerasw.airsync.presentation.ui.components.sheets.HelpSection
 
 @Composable
@@ -55,8 +56,9 @@ fun HelpAndGuidesContent() {
             HelpSection(
                 title = "ADB & Mirroring",
                 iconRes = R.drawable.rounded_laptop_mac_24,
-                content = "Install 'android-platform-tools' and 'scrcpy' on Mac via brew. Enable Wireless Debugging in Developer Options on Android. Use 'adb pair ip:port' with the code provided. Mirroring is an H.I.B+ feature.",
-                links = emptyList()
+                content = "Mirroring, Play on computer and opening this phone's apps on your computer use Wireless debugging. Set it up once with the steps below; your computer brings everything it needs, so there is nothing to install and no terminal.",
+                links = emptyList(),
+                extra = { MirroringSetupCard(containerColor = MaterialTheme.colorScheme.surfaceContainer) }
             ),
             HelpSection(
                 title = "Re-connection",
@@ -145,6 +147,8 @@ private fun ExpandableHelpSection(section: HelpSection) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    section.extra?.invoke()
 
                     section.links.forEach { (label, url) ->
                         TextButton(

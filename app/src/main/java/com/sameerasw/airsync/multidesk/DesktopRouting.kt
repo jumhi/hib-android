@@ -15,7 +15,9 @@ object DesktopRouting {
         "clipboardImageUpdate",
         "call_event",
         "call_progress",
-        "ringState"
+        "ringState",
+        // ADB setup (SPACE.md §8.1): the phone's own Wireless debugging state, the same for every computer.
+        "adbSetupState"
     )
 
     /** Answers to a desktop's request; when sent asynchronously they go back to whoever asked last. */
@@ -47,7 +49,9 @@ object DesktopRouting {
         "ping", "status", "macInfo", "macVolume", "modifierStatus", "deckState", "scenesList",
         "findRelayConfig", "fileChunk", "fileChunkAck", "flickLanded", "transferVerified",
         "screenFrame", "screenShareState", "phoneAudioState", "findMacRingState", "sceneRunResult",
-        "deckActionResult", "desktopsList", "desktopActivity", "flickStart", "screensInfo"
+        "deckActionResult", "desktopsList", "desktopActivity", "flickStart", "screensInfo",
+        // Renewed every few minutes while a computer's "Set up mirroring" card is open: not a user request.
+        "adbSetupRequest"
     )
 
     const val REQUESTER_WINDOW_MS = 30_000L

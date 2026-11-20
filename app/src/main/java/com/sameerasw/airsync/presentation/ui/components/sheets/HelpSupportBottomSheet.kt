@@ -45,12 +45,15 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.sameerasw.airsync.R
 import com.sameerasw.airsync.presentation.ui.components.RoundedCardContainer
+import com.sameerasw.airsync.presentation.ui.components.cards.MirroringSetupCard
 
 data class HelpSection(
     val title: String,
     val iconRes: Int,
     val content: String,
-    val links: List<Pair<String, String>> = emptyList()
+    val links: List<Pair<String, String>> = emptyList(),
+    /** Shown under [content] when the section is open (e.g. the "Set up mirroring" card). */
+    val extra: (@Composable () -> Unit)? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,8 +79,9 @@ fun HelpSupportBottomSheet(
             HelpSection(
                 title = "ADB & Mirroring",
                 iconRes = R.drawable.rounded_laptop_mac_24,
-                content = "Install 'android-platform-tools' and 'scrcpy' on Mac via brew. Enable Wireless Debugging in Developer Options on Android. Use 'adb pair ip:port' with the code provided. Mirroring is an H.I.B+ feature.",
-                links = emptyList()
+                content = "Mirroring, Play on computer and opening this phone's apps on your computer use Wireless debugging. Set it up once with the steps below; your computer brings everything it needs, so there is nothing to install and no terminal.",
+                links = emptyList(),
+                extra = { MirroringSetupCard(containerColor = MaterialTheme.colorScheme.surfaceContainer) }
             ),
             HelpSection(
                 title = "Re-connection",
@@ -194,6 +198,8 @@ private fun ExpandableHelpSection(section: HelpSection) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    section.extra?.invoke()
 
                     section.links.forEach { (label, url) ->
                         TextButton(

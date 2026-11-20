@@ -203,6 +203,15 @@
             android:taskAffinity=""
             android:theme="@style/Theme.AirSync.Transparent" />
 
+        <!-- H.I.B: opens Developer options / Wireless debugging for "Set up mirroring" (SPACE.md §8) -->
+        <activity
+            android:name=".multidesk.AdbSetupLaunchActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.AirSync.Transparent" />
+
         <service
             android:name=".service.OutboundQuickShareService"
             android:exported="false"

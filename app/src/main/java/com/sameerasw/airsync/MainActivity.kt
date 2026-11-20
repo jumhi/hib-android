@@ -48,16 +48,28 @@ import kotlinx.coroutines.runBlocking
 import java.net.URLDecoder
 
 object AdbDiscoveryHolder {
-    private var discovery: AdbMdnsDiscovery? = null
+    @Volatile private var discovery: AdbMdnsDiscovery? = null
+    private val listeners = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
 
+    /** Runs [listener] whenever the discovered `_adb-tls-connect._tcp` services change (survives restarts). */
+    fun addChangeListener(listener: () -> Unit) {
+        listeners.addIfAbsent(listener)
+    }
+
+    private fun notifyListeners() {
+        listeners.forEach { runCatching { it() } }
+    }
+
+    @Synchronized
     fun initialize(context: android.content.Context) {
         if (discovery == null) {
             Log.d("AdbDiscoveryHolder", "Initializing ADB discovery")
-            discovery = AdbMdnsDiscovery(context.applicationContext)
+            discovery = AdbMdnsDiscovery(context.applicationContext, onChange = { notifyListeners() })
             discovery?.startDiscovery()
         }
     }
 
+    @Synchronized
     fun restartDiscovery(context: android.content.Context) {
         Log.d("AdbDiscoveryHolder", "Restarting ADB discovery")
         discovery?.stopDiscovery()
@@ -68,6 +80,9 @@ object AdbDiscoveryHolder {
     fun isDiscoveryActive(): Boolean {
         return discovery != null
     }
+
+    /** True when NSD discovery is actually running (it can fail to start, e.g. without network). */
+    fun isRunning(): Boolean = discovery?.isRunning() == true
 
     fun getDiscoveredServices(): List<AdbMdnsDiscovery.AdbServiceInfo> {
         return discovery?.getDiscoveredServices() ?: emptyList()

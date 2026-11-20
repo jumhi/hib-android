@@ -38,7 +38,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  *  - answers `desktopsRequest` and pushes `desktopsList` when the set of connected computers changes;
  *  - H.I.B Space (docs/SPACE.md): tracks which computer is in use (`desktopActivity`), picks the target
  *    for Flick / Play with the one target rule ([TargetRule]) and shares the space key;
- *  - Point & Flick (SPACE.md §7): keeps every connected computer's screens (`screensInfo`).
+ *  - Point & Flick (SPACE.md §7): keeps every connected computer's screens (`screensInfo`);
+ *  - ADB setup (SPACE.md §8): hands `adbSetupRequest` to [AdbSetupMonitor], which tells every computer
+ *    the phone's own Wireless debugging state (`adbSetupState`).
  */
 object DesktopHub {
     private const val TAG = "DesktopHub"
@@ -117,6 +119,7 @@ object DesktopHub {
     fun start(context: Context) {
         appContext = context.applicationContext
         if (!started.compareAndSet(false, true)) return
+        AdbSetupMonitor.start(context.applicationContext)
         val ds = DataStoreManager.getInstance(context.applicationContext)
         scope.launch {
             migrateIfNeeded(ds)
@@ -144,9 +147,12 @@ object DesktopHub {
             }
             launch { ds.getDeviceName().collect { if (it.isNotBlank()) phoneName = it } }
             launch {
-                WebSocketUtil.connectionState.collect {
+                WebSocketUtil.connectionState.collect { connected ->
                     refresh()
                     pushDesktopsListSoon()
+                    // The primary's handshake (macInfo) is what flips this to true.
+                    if (connected) AdbSetupMonitor.onComputerConnected(PrimaryLink)
+                    else AdbSetupMonitor.onComputerGone(PrimaryLink.id)
                 }
             }
             launch { ensureSpaceKey() }
@@ -393,6 +399,8 @@ object DesktopHub {
                 type == "desktopActivity" -> onDesktopActivity(link, json)
                 // Both the primary and the other computers (SPACE.md §7.2).
                 type == "screensInfo" -> onScreensInfo(link, json)
+                // Both the primary and the other computers (SPACE.md §8.2); the reply goes to [link] only.
+                type == AdbSetupJson.REQUEST -> AdbSetupMonitor.onRequest(context, link, json)
                 type == "flickStart" -> {
                     val data = runCatching { JSONObject(json).optJSONObject("data") }.getOrNull() ?: JSONObject()
                     IncomingFlicks.onFlickStart(context, link, data)
@@ -524,6 +532,7 @@ object DesktopHub {
     }
 
     private fun cleanupFor(context: Context, desktopId: String) {
+        AdbSetupMonitor.onComputerGone(desktopId)
         PhoneFileReceiver.onSenderGone(context, desktopId)
         relays.involving(desktopId).forEach { failRelay(it.id, "peerLost") }
     }
@@ -551,6 +560,7 @@ object DesktopHub {
         runCatching { SyncManager.startPeriodicSync(ctx) }
         runCatching { SyncManager.checkAndSyncDeviceStatus(ctx, forceSync = true) }
         runCatching { ServiceManager.updateServiceState(ctx) }
+        AdbSetupMonitor.onComputerConnected(session)
         syncIconsTo(ctx, session, macInfo)
         refresh()
         pushDesktopsListSoon()
