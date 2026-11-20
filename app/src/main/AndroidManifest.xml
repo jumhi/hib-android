@@ -154,7 +154,7 @@
             </intent-filter>
         </activity>
 
-        <!-- H.I.B: Flick to Mac — share-sheet overlay; flick the card up to throw it onto the Mac -->
+        <!-- H.I.B: Flick — share-sheet overlay; throw the card at a device bubble to send it there -->
         <activity
             android:name=".presentation.ui.activities.FlickActivity"
             android:excludeFromRecents="true"
@@ -178,6 +178,13 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+
+        <!-- H.I.B: Flick settings (Teach aim) -->
+        <activity
+            android:name=".presentation.ui.activities.FlickSettingsActivity"
+            android:exported="false"
+            android:label="Flick settings"
+            android:theme="@style/Theme.AirSync" />
 
         <!-- H.I.B: opens / shares a file a computer flicked to the phone (from its notification) -->
         <activity

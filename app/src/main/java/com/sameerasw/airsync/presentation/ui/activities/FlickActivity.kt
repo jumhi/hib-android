@@ -49,6 +49,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -98,16 +99,32 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
-import com.sameerasw.airsync.data.local.DataStoreManager
 import com.sameerasw.airsync.ui.theme.AirSyncTheme
 import com.sameerasw.airsync.utils.FlickSender
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.material.icons.rounded.LinkOff
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.graphics.Brush
+import com.sameerasw.airsync.multidesk.AimMatcher
+import com.sameerasw.airsync.multidesk.BubbleDevice
+import com.sameerasw.airsync.multidesk.DesktopHub
+import com.sameerasw.airsync.multidesk.DeviceBubbleArc
+import com.sameerasw.airsync.multidesk.FlickAimStore
+import com.sameerasw.airsync.multidesk.FlickSectors
+import com.sameerasw.airsync.multidesk.HibCyan
+import com.sameerasw.airsync.multidesk.HibInk
+import com.sameerasw.airsync.multidesk.HibLime
+import com.sameerasw.airsync.multidesk.HibPanel
+import com.sameerasw.airsync.multidesk.PairedDesktops
+import com.sameerasw.airsync.multidesk.label
+import com.sameerasw.airsync.utils.FlickAim
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.util.UUID
@@ -116,9 +133,11 @@ import kotlin.math.hypot
 import kotlin.math.max
 
 /**
- * H.I.B — "Flick to Mac". A translucent overlay that shows the shared content as a card; flick it up off
- * the top of the screen and it flies onto the Mac's desktop. Reachable from the system share sheet
- * (photos, videos, files, links, text) and from the Flick card in H.I.B (photo picker).
+ * H.I.B — Flick: "throw it at a device". A translucent overlay that shows the shared content as a card
+ * under a row of device bubbles (every connected computer). Throw the card at a bubble and it flies onto
+ * that computer's screen; a straight-up throw goes to the highlighted default (the target rule: a tapped
+ * bubble, else where the phone points, else the computer in use, else the last one used, else the main
+ * one). Reachable from the system share sheet and from the Flick card in H.I.B (photo picker).
  */
 class FlickActivity : ComponentActivity() {
 
@@ -187,9 +206,10 @@ private class FlickHaptics(context: Context) {
     }
 }
 
-private val FlickCyan = Color(0xFF20D9FF)
+private val FlickCyan = HibCyan
 private const val LAUNCH_VELOCITY = 1200f   // px/s upward
-private const val LAUNCH_DISTANCE = 0.35f   // of screen height
+private const val LAUNCH_DISTANCE = 0.28f   // of screen height
+private val CARD_SHIFT = 56.dp              // the card sits a little below centre, under the bubbles
 
 @Composable
 private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
@@ -200,53 +220,61 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
 
     val items = remember { mutableStateListOf<FlickItem>().apply { addAll(initial) } }
     val previews = remember { mutableStateMapOf<String, FlickPreview>() }
-    var macName by remember { mutableStateOf("your Mac") }
-    var connected by remember { mutableStateOf(FlickSender.canSend()) }
 
     val dim = remember { Animatable(0f) }
     val offset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     val grab = remember { Animatable(1f) }
     val enter = remember { Animatable(0f) }
+    val throwScale = remember { Animatable(1f) }
+    val throwAlpha = remember { Animatable(1f) }
+    val pulse = remember { Animatable(0f) }
+    var pulseId by remember { mutableStateOf<String?>(null) }
     var liveVy by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
     var launching by remember { mutableStateOf(false) }
+    var sentTo by remember { mutableStateOf<String?>(null) }
     var showSent by remember { mutableStateOf(false) }
     var closing by remember { mutableStateOf(false) }
     var rootSize by remember { mutableStateOf(IntSize.Zero) }
     val pending = remember { mutableListOf<Deferred<Boolean>>() }
+    val bubbleCenters = remember { mutableStateMapOf<String, Offset>() }
+
+    // H.I.B Space: every connected computer is a bubble; the target rule picks the default
+    // (explicit tap > aim > in use > last used > primary) and a drag lights the bubble it points at.
+    val allDesktops by DesktopHub.desktops.collectAsState()
+    val online = allDesktops.filter { it.isConnected }
+    val onlineIds = online.map { it.name }
+    val connected = online.isNotEmpty()
+    val bubbles = online.map { BubbleDevice(it.name, it.name, it.platform, inUse = it.inUse, playing = it.playing) }
+    var explicitPick by remember { mutableStateOf<String?>(null) }
+    var aimedId by remember { mutableStateOf<String?>(null) }
+    val taughtFlow = remember { FlickAimStore.flow(context) }
+    val taught by taughtFlow.collectAsState(initial = emptyMap())
+    LaunchedEffect(taught, onlineIds) {
+        while (true) {
+            val now = FlickAim.current()?.let { AimMatcher.Aim(it.first, it.second) }
+            val a = AimMatcher.nearest(now, taught, onlineIds)
+            if (a != aimedId) {
+                aimedId = a
+                if (a != null && explicitPick == null && !dragging) haptics.tick()
+            }
+            delay(150)
+        }
+    }
+    val pick = remember(allDesktops, explicitPick, aimedId) { DesktopHub.targetPick(explicitPick, aimedId) }
+    val minDrag = with(density) { 36.dp.toPx() }
+    val dragIndex = if (dragging && !launching) {
+        FlickSectors.sectorFor(offset.value.x, offset.value.y, online.size, minDrag)
+    } else null
+    val dragLitId = dragIndex?.let { online.getOrNull(it)?.name }
+    val litId = when {
+        launching -> sentTo
+        dragLitId != null -> dragLitId
+        else -> pick?.id
+    }
 
     LaunchedEffect(Unit) {
         dim.animateTo(1f, tween(220))
-    }
-    LaunchedEffect(Unit) {
-        macName = withContext(Dispatchers.IO) {
-            try {
-                DataStoreManager.getInstance(context).getLastConnectedDevice().first()?.name
-            } catch (_: Exception) {
-                null
-            }
-        }?.takeIf { it.isNotBlank() } ?: "your Mac"
-    }
-    LaunchedEffect(Unit) {
-        while (true) {
-            connected = FlickSender.canSend()
-            delay(1000)
-        }
-    }
-    // H.I.B multi-desktop: with more than one computer connected, chips pick where the flick lands
-    // (remembered: defaults to the last one used).
-    val allDesktops by com.sameerasw.airsync.multidesk.DesktopHub.desktops.collectAsState()
-    val onlineDesktops = allDesktops.filter { it.isConnected }
-    var flickTarget by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) {
-        flickTarget = withContext(Dispatchers.IO) {
-            runCatching { DataStoreManager.getInstance(context).getFlickTargetDesktop().first() }.getOrNull()
-        }
-    }
-    val effectiveTarget = onlineDesktops.firstOrNull { it.name == flickTarget }?.name
-        ?: onlineDesktops.firstOrNull()?.name
-    LaunchedEffect(effectiveTarget) {
-        FlickSender.target = effectiveTarget
-        if (effectiveTarget != null) macName = effectiveTarget
     }
     LaunchedEffect(Unit) {
         initial.forEach { item ->
@@ -265,6 +293,9 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
         enter.snapTo(0f)
         enter.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow))
     }
+    LaunchedEffect(dragLitId) {
+        if (dragging && dragLitId != null) haptics.tick()
+    }
 
     fun close() {
         if (closing) return
@@ -277,7 +308,7 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
 
     BackHandler { close() }
 
-    fun fire(item: FlickItem, exitXRatio: Float, velocity: Float, angle: Float) {
+    fun fire(item: FlickItem, to: String, exitXRatio: Float, velocity: Float, angle: Float) {
         haptics.heavy()
         val preview = previews[item.id]
         pending += scope.async(Dispatchers.IO) {
@@ -291,44 +322,61 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                 velocity = velocity,
                 angle = angle,
                 thumbnailBase64 = preview?.thumbnailBase64,
-                text = item.text
+                text = item.text,
+                to = to
             )
             if (item.uri != null) {
-                FlickSender.startFileTransfer(context, item.id, item.uri, item.name, item.mime)
+                FlickSender.startFileTransfer(context, item.id, item.uri, item.name, item.mime, to = to)
             } else {
                 started
             }
         }
     }
 
-    fun launchCard(v: Offset) {
+    /** Throws the top card into [targetId]'s bubble. */
+    fun launchCard(v: Offset, targetId: String) {
         val item = items.firstOrNull() ?: return
         launching = true
+        sentTo = targetId
+        FlickSender.target = targetId
+        DesktopHub.noteUsed(targetId)
         scope.launch {
             val w = rootSize.width.toFloat().coerceAtLeast(1f)
             val h = rootSize.height.toFloat().coerceAtLeast(1f)
-            val cardH = w * 0.68f * 1.3f
+            val centre = Offset(w / 2f, h / 2f + with(density) { CARD_SHIFT.toPx() })
+            val bubble = bubbleCenters[targetId] ?: Offset(w / 2f, h * 0.14f)
             val start = offset.value
+            val end = bubble - centre
+            val path = end - start
+            val dist = path.getDistance().coerceAtLeast(1f)
             val mag = hypot(v.x, v.y)
-            val speed = max(mag, 2400f)
-            val dir = if (v.y < -200f && mag > 0f) Offset(v.x / mag, v.y / mag) else Offset(0f, -1f)
-            val endY = -(h / 2f + cardH)
-            val seconds = (start.y - endY) / (speed * -dir.y)
-            val target = Offset(start.x + dir.x * speed * seconds, endY)
-            val durationMs = (seconds * 1000f).toInt().coerceIn(90, 420)
-            val angle = Math.toDegrees(atan2(dir.x, -dir.y).toDouble()).toFloat()
+            val speed = max(mag, 2600f)
+            val durationMs = (dist / speed * 1000f).toInt().coerceIn(200, 380)
+            val angle = Math.toDegrees(atan2(path.x, -path.y).toDouble()).toFloat()
+            val exitX = ((w / 2f + start.x) / w).coerceIn(0f, 1f)
             var fired = false
-            offset.animateTo(target, tween(durationMs, easing = LinearEasing)) {
-                // The card's centre crossing the top edge is the moment it "leaves" the phone.
-                if (!fired && h / 2f + value.y <= 0f) {
+            launch { throwScale.animateTo(0.12f, tween(durationMs, easing = FastOutLinearInEasing)) }
+            launch { throwAlpha.animateTo(0f, tween(durationMs / 3, delayMillis = durationMs * 2 / 3)) }
+            offset.animateTo(end, tween(durationMs, easing = LinearOutSlowInEasing)) {
+                // The card is on its way: tell the computer now so its card can start flying in.
+                if (!fired && (value - start).getDistance() >= dist * 0.3f) {
                     fired = true
-                    fire(item, ((w / 2f + value.x) / w).coerceIn(0f, 1f), max(mag, LAUNCH_VELOCITY), angle)
+                    fire(item, targetId, exitX, max(mag, LAUNCH_VELOCITY), angle)
                 }
             }
-            if (!fired) fire(item, ((w / 2f + offset.value.x) / w).coerceIn(0f, 1f), max(mag, LAUNCH_VELOCITY), angle)
+            if (!fired) fire(item, targetId, exitX, max(mag, LAUNCH_VELOCITY), angle)
 
+            // Landed in the bubble.
+            haptics.tick()
+            pulseId = targetId
+            launch {
+                pulse.snapTo(1f)
+                pulse.animateTo(0f, tween(560))
+            }
             items.removeAt(0)
             offset.snapTo(Offset.Zero)
+            throwScale.snapTo(1f)
+            throwAlpha.snapTo(1f)
             launching = false
             if (items.isEmpty()) {
                 showSent = true
@@ -340,14 +388,27 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
         }
     }
 
+    /** Where a release sends the card: the lit bubble, else the bubble the throw points at, else the default. */
+    fun targetForRelease(v: Offset): String? {
+        val n = online.size
+        val o = offset.value
+        val byDrag = FlickSectors.sectorFor(o.x, o.y, n, minDrag)
+        val byThrow = if (byDrag == null && o.getDistance() < minDrag && hypot(v.x, v.y) > LAUNCH_VELOCITY) {
+            FlickSectors.sectorFor(v.x, v.y, n)
+        } else null
+        return (byDrag ?: byThrow)?.let { online.getOrNull(it)?.name } ?: pick?.id
+    }
+
     fun release(v: Offset) {
+        dragging = false
         scope.launch { grab.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium)) }
         liveVy = 0f
         if (launching || items.isEmpty()) return
         val h = rootSize.height.toFloat()
-        val wantsLaunch = v.y < -LAUNCH_VELOCITY || (offset.value.y < -LAUNCH_DISTANCE * h && v.y < 0f)
-        if (wantsLaunch && connected) {
-            launchCard(v)
+        val wantsLaunch = v.y < -LAUNCH_VELOCITY || (offset.value.y < -LAUNCH_DISTANCE * h && v.y < 400f)
+        val target = if (wantsLaunch && connected) targetForRelease(v) else null
+        if (target != null) {
+            launchCard(v, target)
         } else {
             scope.launch {
                 offset.animateTo(
@@ -371,13 +432,22 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { rootSize = it }
-            .background(Color.Black.copy(alpha = 0.6f * dim.value))
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        HibInk.copy(alpha = 0.92f * dim.value),
+                        Color.Black.copy(alpha = 0.62f * dim.value),
+                        Color.Black.copy(alpha = 0.7f * dim.value)
+                    )
+                )
+            )
             .pointerInput(Unit) {
                 val tracker = VelocityTracker()
                 detectDragGestures(
                     onDragStart = {
                         tracker.resetTracking()
                         if (!launching && items.isNotEmpty()) {
+                            dragging = true
                             scope.launch { grab.animateTo(1.05f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium)) }
                         }
                     },
@@ -397,67 +467,135 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                 )
             }
     ) {
-        val cardWidth = with(density) { min((rootSize.width * 0.68f).toDp(), 320.dp) }
+        val cardWidth = with(density) { min((rootSize.width * 0.64f).toDp(), 300.dp) }
         val cardHeight = cardWidth * 1.3f
 
-        // Hint
+        // Header: title, the device bubbles, and where a flick goes right now.
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
+                .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(top = 28.dp)
-                .graphicsLayer { alpha = dim.value * (1f - glow * 0.4f) },
+                .padding(top = 8.dp)
+                .graphicsLayer { alpha = dim.value },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                Icons.Rounded.ArrowUpward,
-                contentDescription = null,
-                tint = if (connected) FlickCyan else Color.White.copy(alpha = 0.6f),
-                modifier = Modifier
-                    .size(28.dp)
-                    .graphicsLayer { translationY = -glow * 10.dp.toPx() }
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = if (connected) "Flick up to send to $macName" else "Connect H.I.B to your Mac to flick",
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            if (onlineDesktops.size > 1) {
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    onlineDesktops.forEach { d ->
-                        val selected = d.name == effectiveTarget
-                        Surface(
-                            onClick = {
-                                haptics.tick()
-                                flickTarget = d.name
-                                FlickSender.target = d.name
-                                macName = d.name
-                                scope.launch(Dispatchers.IO) {
-                                    runCatching { DataStoreManager.getInstance(context).setFlickTargetDesktop(d.name) }
-                                }
-                            },
-                            shape = RoundedCornerShape(50),
-                            color = if (selected) FlickCyan.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.14f),
-                            contentColor = if (selected) Color.Black else Color.White
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Flick",
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Throw it at a device",
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                IconButton(onClick = {
+                    haptics.tick()
+                    context.startActivity(Intent(context, FlickSettingsActivity::class.java))
+                }) {
+                    Icon(Icons.Rounded.Tune, contentDescription = "Flick settings", tint = Color.White.copy(alpha = 0.85f))
+                }
+            }
+
+            Spacer(Modifier.height(22.dp))
+
+            if (connected) {
+                DeviceBubbleArc(
+                    devices = bubbles,
+                    litId = litId,
+                    aimedId = aimedId,
+                    pulseId = pulseId,
+                    pulse = pulse.value,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    onPositioned = { id, p -> bubbleCenters[id] = p },
+                    onTap = { id ->
+                        haptics.tick()
+                        explicitPick = if (explicitPick != null && PairedDesktops.sameName(explicitPick!!, id)) null else id
+                    }
+                )
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = HibPanel.copy(alpha = 0.9f),
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.LinkOff, contentDescription = null, tint = Color.White.copy(alpha = 0.7f))
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = "No computer is connected. Open H.I.B to connect one.",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(26.dp))
+
+            if (connected) {
+                val target = dragLitId ?: pick?.id
+                val reason = if (dragLitId != null) null else pick?.reason
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.ArrowUpward,
+                        contentDescription = null,
+                        tint = FlickCyan,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .graphicsLayer { translationY = -glow * 6.dp.toPx() }
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = if (dragLitId != null) "Let go to send to $target" else "Flick up to send to $target",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (reason != null && online.size > 1) {
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .border(1.dp, FlickCyan.copy(alpha = 0.6f), RoundedCornerShape(50))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text(
-                                text = d.name,
-                                style = MaterialTheme.typography.labelLarge,
-                                maxLines = 1,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                            )
+                            Text(reason.label(), color = FlickCyan, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
                     }
+                }
+                if (online.size > 1) {
+                    Text(
+                        text = if (explicitPick != null) "Tap it again to go back to automatic" else "Drag toward a bubble, or tap one to pick it",
+                        color = Color.White.copy(alpha = 0.55f),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             }
             if (items.size > 1) {
                 Text(
                     text = "${items.size} items — one flick each",
                     color = Color.White.copy(alpha = 0.65f),
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
         }
@@ -471,6 +609,7 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
+                    .offset(y = CARD_SHIFT)
                     .size(cardWidth, cardHeight)
                     .graphicsLayer {
                         val s = 1f - 0.06f * depth
@@ -478,10 +617,10 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                             val o = offset.value
                             translationX = o.x
                             translationY = o.y + depth * 18.dp.toPx()
-                            rotationZ = (o.x / size.width) * 14f
-                            scaleX = s * grab.value
-                            scaleY = s * grab.value
-                            alpha = dim.value
+                            rotationZ = (o.x / size.width) * 14f * throwScale.value
+                            scaleX = s * grab.value * throwScale.value
+                            scaleY = s * grab.value * throwScale.value
+                            alpha = dim.value * throwAlpha.value
                         } else {
                             translationY = depth * 18.dp.toPx()
                             scaleX = s
@@ -506,24 +645,24 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
             Text("Cancel", color = Color.White.copy(alpha = 0.8f))
         }
 
-        // "Sent ✓"
+        // "Sent to …"
         AnimatedVisibility(
             visible = showSent,
-            enter = slideInVertically { -it } + fadeIn(),
-            exit = slideOutVertically { -it } + fadeOut(),
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(top = 24.dp)
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 72.dp)
         ) {
             Surface(shape = CircleShape, color = Color(0xFF101530), shadowElevation = 8.dp) {
                 Row(
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Color(0xFFBAFF38))
+                    Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = HibLime)
                     Spacer(Modifier.width(8.dp))
-                    Text("Sent to $macName", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text("Sent to ${sentTo ?: "computer"}", color = Color.White, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

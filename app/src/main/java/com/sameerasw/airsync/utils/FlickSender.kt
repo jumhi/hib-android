@@ -23,13 +23,13 @@ import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * H.I.B — Flick to Mac: the wire side.
+ * H.I.B — Flick: the wire side (the computer it goes to is picked on the Flick screen).
  *
- * 1. [sendFlickStart] fires the instant a card leaves the top of the phone's screen, so the Mac can
- *    launch its card before a single byte of the file has moved.
- * 2. [startFileTransfer] then streams the file with the Mac's existing file-transfer protocol
+ * 1. [sendFlickStart] fires the instant a card is thrown, so the computer can launch its card before a
+ *    single byte of the file has moved.
+ * 2. [startFileTransfer] then streams the file with the existing file-transfer protocol
  *    (fileTransferInit → fileChunk… with fileChunkAck flow control → fileTransferComplete), tagging the
- *    init with `flickId` so the Mac can drive the flying card's progress ring.
+ *    init with `flickId` so the computer can drive the flying card's progress ring.
  *
  * Files are streamed in 64 KB chunks with a bounded in-flight window, so memory stays flat for any size.
  */
@@ -46,12 +46,12 @@ object FlickSender {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val _landed = MutableSharedFlow<String>(extraBufferCapacity = 16)
-    /** Emits a flick id when the Mac reports that card has landed (`flickLanded`). */
+    /** Emits a flick id when the computer reports that card has landed (`flickLanded`). */
     val landed: SharedFlow<String> = _landed
 
     /**
-     * H.I.B multi-desktop: which computer Flick sends to (desktop name). Null = the primary computer,
-     * or whichever computer is connected when the primary isn't.
+     * H.I.B multi-desktop: which computer Flick sends to (desktop name). Null = the target rule's pick
+     * (the computer in use, else the last one used, else the main one).
      */
     @Volatile var target: String? = null
 
@@ -65,8 +65,10 @@ object FlickSender {
 
     private fun send(to: String?, json: String): Boolean {
         if (to == null) {
-            // No explicit target: primary first, then any other connected computer.
-            val link = com.sameerasw.airsync.multidesk.DesktopHub.connectedLinks().firstOrNull()
+            // No explicit target: the target rule (in use > last used > primary).
+            val pick = com.sameerasw.airsync.multidesk.DesktopHub.targetPick()?.id
+            val link = com.sameerasw.airsync.multidesk.DesktopHub.findLink(pick)
+                ?: com.sameerasw.airsync.multidesk.DesktopHub.connectedLinks().firstOrNull()
             return link?.send(json) ?: WebSocketUtil.sendPrimaryOrBle(json)
         }
         return com.sameerasw.airsync.multidesk.DesktopHub.sendTo(to, json)
@@ -97,7 +99,8 @@ object FlickSender {
         velocity: Float,
         angle: Float,
         thumbnailBase64: String?,
-        text: String?
+        text: String?,
+        to: String? = target
     ): Boolean {
         val data = JSONObject().apply {
             put("id", id)
@@ -110,7 +113,7 @@ object FlickSender {
             put("angle", angle.toDouble())
             if (!thumbnailBase64.isNullOrEmpty()) put("thumbnail", thumbnailBase64)
             if (text != null) put("text", text.take(MAX_TEXT_CHARS))
-            // Where the phone is pointing, so a Mac with several screens can pick one.
+            // Where the phone is pointing, so a computer with several screens can pick one.
             FlickAim.current()?.let { (heading, elevation) ->
                 put("heading", heading.toDouble())
                 put("elevation", elevation.toDouble())
@@ -120,12 +123,12 @@ object FlickSender {
             put("type", "flickStart")
             put("data", data)
         }
-        return send(target, msg.toString())
+        return send(to, msg.toString())
     }
 
     /**
      * Opens [uri] right away (so the share grant can't lapse once the overlay closes), then streams it
-     * to the Mac in the background. Suspends only until the stream is open; returns false if it can't be read.
+     * to the computer in the background. Suspends only until the stream is open; returns false if it can't be read.
      */
     suspend fun startFileTransfer(context: Context, flickId: String, uri: Uri, name: String, mime: String, tagKey: String = "flickId", to: String? = target): Boolean =
         withContext(Dispatchers.IO) {
@@ -137,7 +140,7 @@ object FlickSender {
                 if (size > 0) {
                     resolver.openInputStream(uri)
                 } else {
-                    // Unknown length: spool to cache once (constant memory) so the Mac can verify the size.
+                    // Unknown length: spool to cache once (constant memory) so the computer can verify the size.
                     val tmp = File(appContext.cacheDir, "flick_$flickId")
                     resolver.openInputStream(uri)?.use { src -> tmp.outputStream().use { src.copyTo(it, 256 * 1024) } }
                     size = tmp.length()
@@ -160,7 +163,7 @@ object FlickSender {
                 }
                 if (!ok) {
                     sendCancel(flickId, to)
-                    toast(appContext, "Flick to Mac: couldn't send $name")
+                    toast(appContext, "Flick: couldn't send $name" + (to?.let { " to $it" } ?: ""))
                 }
             }
             true
@@ -180,7 +183,7 @@ object FlickSender {
                     put("mime", mime)
                     put("chunkSize", CHUNK_SIZE)
                     put("isClipboard", false)
-                    put(tagKey, id) // "flickId" for Flick to Mac; "searchFetchId" for H.I.B phone search fetches
+                    put(tagKey, id) // "flickId" for Flick; "searchFetchId" for H.I.B phone search fetches
                 })
             }
             if (!send(to, init.toString())) return false
