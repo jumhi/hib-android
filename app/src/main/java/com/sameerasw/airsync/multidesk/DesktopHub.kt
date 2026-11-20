@@ -372,6 +372,10 @@ object DesktopHub {
             when {
                 type == "desktopsRequest" -> sendDesktopsList(link)
                 type == "desktopActivity" -> onDesktopActivity(link, json)
+                type == "flickStart" -> {
+                    val data = runCatching { JSONObject(json).optJSONObject("data") }.getOrNull() ?: JSONObject()
+                    IncomingFlicks.onFlickStart(context, link, data)
+                }
                 !isPrimary && (type == "macInfo" || type == "status" || type == "macVolume") -> {
                     // A secondary computer's own media/volume state isn't shown on the phone (the main
                     // screen is about the primary); its macInfo was already consumed by the session.

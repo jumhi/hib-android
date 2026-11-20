@@ -179,6 +179,15 @@
             </intent-filter>
         </activity>
 
+        <!-- H.I.B: opens / shares a file a computer flicked to the phone (from its notification) -->
+        <activity
+            android:name=".multidesk.ReceivedFileActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.AirSync.Transparent" />
+
         <service
             android:name=".service.OutboundQuickShareService"
             android:exported="false"

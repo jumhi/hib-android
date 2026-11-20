@@ -3,4 +3,8 @@
     <cache-path
         name="universal_clipboard"
         path="universal_clipboard/" />
+    <!-- H.I.B: files computers send to the phone (Download/H.I.B), opened/shared from their notification -->
+    <external-path
+        name="hib_downloads"
+        path="Download/H.I.B/" />
 </paths>

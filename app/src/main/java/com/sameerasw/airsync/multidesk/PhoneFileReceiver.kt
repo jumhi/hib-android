@@ -22,7 +22,9 @@ import java.util.concurrent.ConcurrentHashMap
  * H.I.B — desktop → phone files (PROTOCOL.md §6.9). A Mac or Windows PC sends
  * fileTransferInit → fileChunk… → fileTransferComplete; the phone writes each chunk at
  * `index * chunkSize` into a private cache file, acks every chunk to the sender, verifies size and
- * SHA-256 on completion, then publishes the file to Downloads/H.I.B and posts a notification with Open.
+ * SHA-256 on completion, then publishes the file to Downloads/H.I.B and posts a notification with a
+ * preview, Open and Share. A transfer tagged `flickId` is a Flick from that computer (SPACE.md §3.4):
+ * its notification is a heads-up "Flick from <from>".
  *
  * Chunks are handled synchronously on the sender's socket thread, so writes for one transfer are
  * ordered and memory stays flat (one 64 KB chunk at a time).
@@ -42,6 +44,8 @@ object PhoneFileReceiver {
         val chunkSize: Int,
         val checksum: String?,
         val isClipboard: Boolean,
+        /** Set when a computer flicked this file to the phone (pairs with its `flickStart`). */
+        val flickId: String?,
         val file: File,
         val raf: RandomAccessFile,
         val notifId: Int,
@@ -71,16 +75,21 @@ object PhoneFileReceiver {
             incoming.remove(id)?.let { closeQuietly(it); it.file.delete() }
             val raf = RandomAccessFile(file, "rw")
             raf.setLength(0)
+            val flickId = data.optString("flickId").ifBlank { null }
+            val senderName = IncomingFlicks.meta(flickId)?.from
+                ?: data.optString("relayFrom").ifBlank { null }
+                ?: from.name
             val state = Incoming(
                 id = id,
                 senderId = from.id,
-                senderName = from.name,
+                senderName = senderName,
                 name = name,
                 size = size,
                 mime = data.optString("mime").ifBlank { guessMime(name) },
                 chunkSize = chunkSize,
                 checksum = data.optString("checksum").ifBlank { null }?.lowercase(),
                 isClipboard = data.optBoolean("isClipboard", false),
+                flickId = flickId,
                 file = file,
                 raf = raf,
                 notifId = ("rx$id").hashCode()
@@ -124,6 +133,8 @@ object PhoneFileReceiver {
         Thread {
             var ok = false
             var uri: Uri? = null
+            var picture: android.graphics.Bitmap? = null
+            val meta = IncomingFlicks.meta(state.flickId)
             try {
                 closeQuietly(state)
                 val actualSize = state.file.length()
@@ -142,6 +153,7 @@ object PhoneFileReceiver {
                                 )
                             }
                         }
+                        picture = IncomingFlicks.preview(state.file, state.mime, meta?.thumbnail)
                         uri = publish(context, state)
                         ok = uri != null
                     }
@@ -153,7 +165,8 @@ object PhoneFileReceiver {
             }
             from.send(JSONObject().put("type", "transferVerified")
                 .put("data", JSONObject().put("id", id).put("verified", ok)).toString())
-            showDone(context, state, ok, uri)
+            IncomingFlicks.forget(state.flickId)
+            showDone(context, state, ok, uri, picture, meta?.from ?: state.senderName)
         }.start()
     }
 
@@ -162,6 +175,7 @@ object PhoneFileReceiver {
         val state = incoming.remove(id) ?: return false
         closeQuietly(state)
         state.file.delete()
+        IncomingFlicks.forget(state.flickId)
         runCatching { NotificationManagerCompat.from(context).cancel(state.notifId) }
         toast(context, "${state.senderName} cancelled ${state.name}")
         return true
@@ -225,13 +239,29 @@ object PhoneFileReceiver {
     }
 
     @SuppressLint("MissingPermission")
-    private fun showDone(context: Context, s: Incoming, ok: Boolean, uri: Uri?) {
-        runCatching {
-            NotificationUtil.showFileComplete(
-                context, s.notifId, s.name, ok, isSending = false, contentUri = uri
-            )
+    private fun showDone(context: Context, s: Incoming, ok: Boolean, uri: Uri?, picture: android.graphics.Bitmap?, from: String) {
+        if (ok && uri != null) {
+            runCatching { NotificationManagerCompat.from(context).cancel(s.notifId) }
+            val title = when {
+                s.flickId != null -> "Flick from $from"
+                s.isClipboard -> "Copied from $from"
+                else -> "From $from"
+            }
+            runCatching {
+                FlickNotifications.showFile(
+                    context, s.notifId + 1, title, s.name, s.mime,
+                    IncomingFlicks.shareableUri(context, uri), picture
+                )
+            }.onFailure {
+                Log.w(TAG, "Rich notification failed (${it.javaClass.simpleName}); using the plain one")
+                runCatching { NotificationUtil.showFileComplete(context, s.notifId, s.name, true, isSending = false, contentUri = uri) }
+            }
+        } else {
+            runCatching {
+                NotificationUtil.showFileComplete(context, s.notifId, s.name, false, isSending = false, contentUri = null)
+            }
         }
-        toast(context, if (ok) "Received ${s.name} from ${s.senderName} (Downloads/$FOLDER)" else "Couldn't receive ${s.name}")
+        toast(context, if (ok) "${s.name} from $from is in Download/$FOLDER" else "Couldn't receive ${s.name} from $from")
     }
 
     private fun toast(context: Context, text: String) {
