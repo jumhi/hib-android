@@ -325,7 +325,10 @@ object SyncManager {
                     version,
                     wallpaperBase64,
                     adbPorts,
-                    WebSocketUtil.currentIpAddress
+                    bleAuthToken = com.sameerasw.airsync.data.ble.BleTransportBridge.deriveAuthToken(
+                        ds.getLastConnectedDevice().first()?.symmetricKey ?: ""
+                    ),
+                    targetIpAddress = WebSocketUtil.currentIpAddress
                 )
 
                 if (WebSocketUtil.sendMessage(deviceInfoJson)) {
