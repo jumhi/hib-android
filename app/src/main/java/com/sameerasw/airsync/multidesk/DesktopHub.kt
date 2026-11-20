@@ -19,7 +19,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -38,12 +40,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  *  - answers `desktopsRequest` and pushes `desktopsList` when the set of connected computers changes;
  *  - H.I.B Space (docs/SPACE.md): tracks which computer is in use (`desktopActivity`), picks the target
  *    for Flick / Play with the one target rule ([TargetRule]) and shares the space key;
- *  - Point & Flick (SPACE.md §7): keeps every connected computer's screens (`screensInfo`);
+ *  - Point & Flick (SPACE.md §7): keeps every connected computer's screens (`screensInfo`) and tells every
+ *    computer the saved screen aims (`screenLayout`, §9.2) after its handshake and when they change;
  *  - ADB setup (SPACE.md §8): hands `adbSetupRequest` to [AdbSetupMonitor], which tells every computer
  *    the phone's own Wireless debugging state (`adbSetupState`).
  */
 object DesktopHub {
     private const val TAG = "DesktopHub"
+    private const val LAYOUT_AFTER_HANDSHAKE_MS = 2_000L
     const val PHONE_ID = DesktopHubIds.PHONE_ID
 
     data class DesktopStatus(
@@ -104,6 +108,10 @@ object DesktopHub {
     private val _screens = MutableStateFlow<Map<String, List<ComputerScreen>>>(emptyMap())
     val screens: StateFlow<Map<String, List<ComputerScreen>>> = _screens.asStateFlow()
 
+    // Shared mouse & keyboard (SPACE.md §9.2): the saved aims as `screenLayout`, and what each computer has.
+    private val layout = LayoutLedger()
+    private val layoutLock = Any()
+
     /** The legacy primary connection, seen as a link. */
     object PrimaryLink : DesktopLink {
         override val id: String get() = primaryName ?: "primary"
@@ -153,7 +161,18 @@ object DesktopHub {
                     // The primary's handshake (macInfo) is what flips this to true.
                     if (connected) AdbSetupMonitor.onComputerConnected(PrimaryLink)
                     else AdbSetupMonitor.onComputerGone(PrimaryLink.id)
+                    if (connected) onLayoutHandshake(PrimaryLink) else layout.forget(PrimaryLink.id)
                 }
+            }
+            launch {
+                // Point setup and "Forget all screens" change the map: every connected computer hears it.
+                FlickScreenStore.flow(context.applicationContext)
+                    .map { PointJson.screenLayout(it) }
+                    .distinctUntilChanged()
+                    .collect { json ->
+                        layout.set(json)
+                        connectedLinks().forEach { sendLayout(it) }
+                    }
             }
             launch { ensureSpaceKey() }
             launch {
@@ -533,6 +552,7 @@ object DesktopHub {
 
     private fun cleanupFor(context: Context, desktopId: String) {
         AdbSetupMonitor.onComputerGone(desktopId)
+        layout.forget(desktopId)
         PhoneFileReceiver.onSenderGone(context, desktopId)
         relays.involving(desktopId).forEach { failRelay(it.id, "peerLost") }
     }
@@ -561,6 +581,7 @@ object DesktopHub {
         runCatching { SyncManager.checkAndSyncDeviceStatus(ctx, forceSync = true) }
         runCatching { ServiceManager.updateServiceState(ctx) }
         AdbSetupMonitor.onComputerConnected(session)
+        onLayoutHandshake(session)
         syncIconsTo(ctx, session, macInfo)
         refresh()
         pushDesktopsListSoon()
@@ -698,6 +719,25 @@ object DesktopHub {
         if (_screens.value[k] == list) return
         _screens.update { it + (k to list) }
         Log.d(TAG, "${link.name} has ${list.size} screen(s)")
+    }
+
+    /** A computer finished its handshake: it gets `screenLayout` shortly after (behind its device info). */
+    private fun onLayoutHandshake(link: DesktopLink) {
+        layout.forget(link.id)
+        scope.launch {
+            delay(LAYOUT_AFTER_HANDSHAKE_MS)
+            sendLayout(link)
+        }
+    }
+
+    /** Sends [link] the current `screenLayout` unless it already has it (or the map hasn't loaded yet). */
+    private fun sendLayout(link: DesktopLink) = synchronized(layoutLock) {
+        if (!link.isReady()) return@synchronized
+        val json = layout.pending(link.id) ?: return@synchronized
+        if (link.send(json)) {
+            layout.record(link.id, json)
+            Log.d(TAG, "screenLayout → ${link.name}")
+        }
     }
 
     private fun forgetScreens(name: String) {

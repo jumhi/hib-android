@@ -112,6 +112,20 @@ object PointJson {
 
     fun aimSetupHide(): String = envelope("aimSetup", JsonObject().apply { add("screen", JsonNull.INSTANCE) })
 
+    /** `screenLayout` (SPACE.md §9.2): every saved screen aim, so computers can tell which side of each other they sit. */
+    fun screenLayout(saved: List<SavedScreenAim>): String = envelope("screenLayout", JsonObject().apply {
+        add("screens", JsonArray().apply {
+            saved.forEach { s ->
+                add(JsonObject().apply {
+                    addProperty("computer", s.computer)
+                    addProperty("screen", s.screen)
+                    addProperty("h", s.h)
+                    addProperty("e", s.e)
+                })
+            }
+        })
+    })
+
     private fun envelope(type: String, data: JsonObject): String = JsonObject().apply {
         addProperty("type", type)
         add("data", data)
@@ -463,4 +477,36 @@ class SetupLight(
         lastProgress = -1f
         return connected.map { Send(it, PointJson.aimSetupHide()) }
     }
+}
+
+/**
+ * `screenLayout` bookkeeping (SPACE.md §9.2): the current message and what each computer was last sent,
+ * so a computer gets it after its handshake and again only when the Point & Flick map changes.
+ */
+class LayoutLedger {
+    private var current: String? = null
+    private val sent = HashMap<String, String>()
+
+    /** The Point & Flick map changed (or loaded). */
+    @Synchronized
+    fun set(json: String) {
+        current = json
+    }
+
+    /** What [computer] still needs: null before the map has loaded or when it already has this exact message. */
+    @Synchronized
+    fun pending(computer: String): String? = current?.takeIf { sent[key(computer)] != it }
+
+    @Synchronized
+    fun record(computer: String, json: String) {
+        sent[key(computer)] = json
+    }
+
+    /** A computer connected again (or left): it gets the layout afresh after its next handshake. */
+    @Synchronized
+    fun forget(computer: String) {
+        sent.remove(key(computer))
+    }
+
+    private fun key(computer: String) = PairedDesktops.normalizeName(computer)
 }

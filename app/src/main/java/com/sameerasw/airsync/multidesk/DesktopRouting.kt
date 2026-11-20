@@ -17,7 +17,10 @@ object DesktopRouting {
         "call_progress",
         "ringState",
         // ADB setup (SPACE.md §8.1): the phone's own Wireless debugging state, the same for every computer.
-        "adbSetupState"
+        "adbSetupState",
+        // Shared mouse & keyboard layout (SPACE.md §9.2): the Point & Flick aims, the same for every computer.
+        // The hub sends it per computer itself; this only keeps a routed copy from going to one computer.
+        "screenLayout"
     )
 
     /** Answers to a desktop's request; when sent asynchronously they go back to whoever asked last. */
