@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
@@ -36,7 +37,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *  - receives desktop→phone files ([PhoneFileReceiver]) and relays desktop→desktop files ([RelayTable]);
  *  - answers `desktopsRequest` and pushes `desktopsList` when the set of connected computers changes;
  *  - H.I.B Space (docs/SPACE.md): tracks which computer is in use (`desktopActivity`), picks the target
- *    for Flick / Play with the one target rule ([TargetRule]) and shares the space key.
+ *    for Flick / Play with the one target rule ([TargetRule]) and shares the space key;
+ *  - Point & Flick (SPACE.md §7): keeps every connected computer's screens (`screensInfo`).
  */
 object DesktopHub {
     private const val TAG = "DesktopHub"
@@ -94,6 +96,11 @@ object DesktopHub {
     private val _inUseId = MutableStateFlow<String?>(null)
     /** The computer the phone considers in use right now (SPACE.md §3.2 `inUse`), or null. */
     val inUseId: StateFlow<String?> = _inUseId.asStateFlow()
+
+    // Point & Flick: each connected computer's screens, by normalized computer name. A computer that
+    // never sent `screensInfo` (older version) has no entry.
+    private val _screens = MutableStateFlow<Map<String, List<ComputerScreen>>>(emptyMap())
+    val screens: StateFlow<Map<String, List<ComputerScreen>>> = _screens.asStateFlow()
 
     /** The legacy primary connection, seen as a link. */
     object PrimaryLink : DesktopLink {
@@ -305,6 +312,18 @@ object DesktopHub {
         return sessions[PairedDesktops.normalizeName(id)]
     }
 
+    /** Sends to one connected computer by name, nowhere else (false when it isn't connected). */
+    fun sendToComputer(id: String, json: String): Boolean {
+        val link = findLink(id) ?: return false
+        return link.isReady() && link.send(json)
+    }
+
+    /** Point & Flick: asks every connected computer for its screens (`screensRequest`, SPACE.md §7.3). */
+    fun requestScreens() {
+        val msg = PointJson.screensRequest()
+        connectedLinks().forEach { it.send(msg) }
+    }
+
     /** Sends to one computer by name; null/unknown → the primary (with its fallbacks). */
     fun sendTo(id: String?, json: String): Boolean {
         val link = findLink(id)
@@ -372,6 +391,8 @@ object DesktopHub {
             when {
                 type == "desktopsRequest" -> sendDesktopsList(link)
                 type == "desktopActivity" -> onDesktopActivity(link, json)
+                // Both the primary and the other computers (SPACE.md §7.2).
+                type == "screensInfo" -> onScreensInfo(link, json)
                 type == "flickStart" -> {
                     val data = runCatching { JSONObject(json).optJSONObject("data") }.getOrNull() ?: JSONObject()
                     IncomingFlicks.onFlickStart(context, link, data)
@@ -556,6 +577,7 @@ object DesktopHub {
         if (ctx != null && !session.isReady()) {
             cleanupFor(ctx, session.id)
             activity.remove(PairedDesktops.normalizeName(session.name))
+            forgetScreens(session.name)
         }
         refresh()
         pushDesktopsListSoon()
@@ -628,6 +650,8 @@ object DesktopHub {
                 )
             }
         _desktops.value = withSpaceState(out)
+        // A computer that dropped re-sends its screens when it comes back.
+        out.filter { it.state != "connected" }.forEach { forgetScreens(it.name) }
         recomputeSpace()
     }
 
@@ -656,6 +680,19 @@ object DesktopHub {
         )
         activity[PairedDesktops.normalizeName(link.id)] = info
         refresh()
+    }
+
+    private fun onScreensInfo(link: DesktopLink, json: String) {
+        val list = ScreensInfo.parse(json) ?: return
+        val k = PairedDesktops.normalizeName(link.name)
+        if (_screens.value[k] == list) return
+        _screens.update { it + (k to list) }
+        Log.d(TAG, "${link.name} has ${list.size} screen(s)")
+    }
+
+    private fun forgetScreens(name: String) {
+        val k = PairedDesktops.normalizeName(name)
+        if (_screens.value.containsKey(k)) _screens.update { it - k }
     }
 
     /** Target-rule candidates: the connected computers with what the phone knows about them. */

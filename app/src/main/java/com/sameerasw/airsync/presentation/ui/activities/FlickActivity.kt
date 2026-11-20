@@ -26,7 +26,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateFloatAsState
@@ -61,9 +62,12 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material.icons.rounded.Notes
 import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -78,12 +82,14 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -99,27 +105,25 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
-import com.sameerasw.airsync.ui.theme.AirSyncTheme
-import com.sameerasw.airsync.utils.FlickSender
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.material.icons.rounded.LinkOff
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.IconButton
-import androidx.compose.ui.graphics.Brush
 import com.sameerasw.airsync.multidesk.AimMatcher
 import com.sameerasw.airsync.multidesk.BubbleDevice
 import com.sameerasw.airsync.multidesk.DesktopHub
 import com.sameerasw.airsync.multidesk.DeviceBubbleArc
-import com.sameerasw.airsync.multidesk.FlickAimStore
-import com.sameerasw.airsync.multidesk.FlickSectors
+import com.sameerasw.airsync.multidesk.FlickPointing
+import com.sameerasw.airsync.multidesk.FlickScreenStore
 import com.sameerasw.airsync.multidesk.HibCyan
 import com.sameerasw.airsync.multidesk.HibInk
 import com.sameerasw.airsync.multidesk.HibLime
 import com.sameerasw.airsync.multidesk.HibPanel
 import com.sameerasw.airsync.multidesk.PairedDesktops
+import com.sameerasw.airsync.multidesk.ScreenComputer
+import com.sameerasw.airsync.multidesk.ScreenMap
+import com.sameerasw.airsync.multidesk.ScreenTarget
+import com.sameerasw.airsync.multidesk.TargetRule
 import com.sameerasw.airsync.multidesk.label
+import com.sameerasw.airsync.ui.theme.AirSyncTheme
 import com.sameerasw.airsync.utils.FlickAim
+import com.sameerasw.airsync.utils.FlickSender
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -133,21 +137,35 @@ import kotlin.math.hypot
 import kotlin.math.max
 
 /**
- * H.I.B — Flick: "throw it at a device". A translucent overlay that shows the shared content as a card
- * under a row of device bubbles (every connected computer). Throw the card at a bubble and it flies onto
- * that computer's screen; a straight-up throw goes to the highlighted default (the target rule: a tapped
- * bubble, else where the phone points, else the computer in use, else the last one used, else the main
- * one). Reachable from the system share sheet and from the Flick card in H.I.B (photo picker).
+ * H.I.B — Flick: point the phone at a screen and throw. A translucent overlay shows the shared content as
+ * a card under a row of device bubbles (every connected computer; the target one glows). The target is
+ * where the phone points (Point & Flick, SPACE.md §7): the aimed screen lights up on its computer and the
+ * card lands there. Not pointing at a screen → the target rule (in use, then last used, then the main
+ * computer). A one-time Point setup runs by itself when screens aren't mapped yet.
+ *
+ * Reachable from the system share sheet (anything) and from the Flick card in H.I.B (photos & videos,
+ * files, the clipboard). With [EXTRA_POINT_SETUP] it only runs Point setup (Flick settings).
  */
 class FlickActivity : ComponentActivity() {
 
+    companion object {
+        const val EXTRA_POINT_SETUP = "com.sameerasw.airsync.extra.POINT_SETUP"
+
+        /** Opens Flick just to run Point setup again for every screen. */
+        fun pointSetupIntent(context: Context): Intent =
+            Intent(context, FlickActivity::class.java).putExtra(EXTRA_POINT_SETUP, true)
+    }
+
     override fun onResume() {
         super.onResume()
-        com.sameerasw.airsync.utils.FlickAim.start(this)
+        FlickAim.start(this)
+        FlickPointing.resume()
     }
 
     override fun onPause() {
-        com.sameerasw.airsync.utils.FlickAim.stop()
+        FlickAim.stop()
+        // Nothing stays lit on the computers while Flick isn't on screen (SPACE.md §7.4).
+        FlickPointing.clearAll()
         super.onPause()
     }
 
@@ -159,8 +177,9 @@ class FlickActivity : ComponentActivity() {
         )
         window.setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
 
-        val items = FlickMedia.parseIntent(this, intent)
-        if (items.isEmpty()) {
+        val setupOnly = intent?.getBooleanExtra(EXTRA_POINT_SETUP, false) == true
+        val items = if (setupOnly) emptyList() else FlickMedia.parseIntent(this, intent)
+        if (!setupOnly && items.isEmpty()) {
             Toast.makeText(this, "Nothing to flick", Toast.LENGTH_SHORT).show()
             finish()
             return
@@ -168,7 +187,7 @@ class FlickActivity : ComponentActivity() {
 
         setContent {
             AirSyncTheme(darkTheme = true) {
-                FlickOverlay(initial = items, onFinish = { finish() })
+                FlickOverlay(initial = items, setupOnly = setupOnly, onFinish = { finish() })
             }
         }
     }
@@ -187,7 +206,7 @@ data class FlickItem(
 
 private class FlickPreview(val image: ImageBitmap, val thumbnailBase64: String?)
 
-private class FlickHaptics(context: Context) {
+internal class FlickHaptics(context: Context) {
     private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         context.getSystemService(VibratorManager::class.java)?.defaultVibrator
     } else {
@@ -206,13 +225,25 @@ private class FlickHaptics(context: Context) {
     }
 }
 
+/** Screens the user skipped in Point setup this time the app is running, so it doesn't ask on every flick. */
+internal object PointSetupMemory {
+    private val skipped = mutableSetOf<String>()
+    private fun key(t: ScreenTarget) = PairedDesktops.normalizeName(t.computer) + "\u0000" + t.screen
+
+    @Synchronized fun skip(targets: List<ScreenTarget>) { skipped += targets.map(::key) }
+    @Synchronized fun allSkipped(targets: List<ScreenTarget>): Boolean = targets.all { key(it) in skipped }
+    @Synchronized fun clear() = skipped.clear()
+}
+
 private val FlickCyan = HibCyan
 private const val LAUNCH_VELOCITY = 1200f   // px/s upward
 private const val LAUNCH_DISTANCE = 0.28f   // of screen height
 private val CARD_SHIFT = 56.dp              // the card sits a little below centre, under the bubbles
+private const val SCREENS_WAIT_MS = 700L    // how long Flick waits for `screensInfo` before deciding on setup
+private const val AIM_POLL_MS = 100L
 
 @Composable
-private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
+private fun FlickOverlay(initial: List<FlickItem>, setupOnly: Boolean, onFinish: () -> Unit) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -239,38 +270,57 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
     val pending = remember { mutableListOf<Deferred<Boolean>>() }
     val bubbleCenters = remember { mutableStateMapOf<String, Offset>() }
 
-    // H.I.B Space: every connected computer is a bubble; the target rule picks the default
-    // (explicit tap > aim > in use > last used > primary) and a drag lights the bubble it points at.
+    // H.I.B Space: every connected computer is a bubble (an indicator: the target one glows).
     val allDesktops by DesktopHub.desktops.collectAsState()
     val online = allDesktops.filter { it.isConnected }
-    val onlineIds = online.map { it.name }
     val connected = online.isNotEmpty()
     val bubbles = online.map { BubbleDevice(it.name, it.name, it.platform, inUse = it.inUse, playing = it.playing) }
-    var explicitPick by remember { mutableStateOf<String?>(null) }
-    var aimedId by remember { mutableStateOf<String?>(null) }
-    val taughtFlow = remember { FlickAimStore.flow(context) }
-    val taught by taughtFlow.collectAsState(initial = emptyMap())
-    LaunchedEffect(taught, onlineIds) {
-        while (true) {
-            val now = FlickAim.current()?.let { AimMatcher.Aim(it.first, it.second) }
-            val a = AimMatcher.nearest(now, taught, onlineIds)
-            if (a != aimedId) {
-                aimedId = a
-                if (a != null && explicitPick == null && !dragging) haptics.tick()
-            }
-            delay(150)
-        }
+
+    // Point & Flick (SPACE.md §7): every screen of every connected computer, and where the phone points.
+    val screensByComputer by DesktopHub.screens.collectAsState()
+    val inUseId by DesktopHub.inUseId.collectAsState()
+    val computers = online.map { ScreenComputer(it.name, screensByComputer[PairedDesktops.normalizeName(it.name)]) }
+    val targets = remember(computers, inUseId) { ScreenMap.targets(computers, inUseId) }
+    val savedFlow = remember { FlickScreenStore.flow(context) }
+    val saved by savedFlow.collectAsState(initial = null)
+    val compass = remember { FlickAim.isAvailable(context) }
+    val unmapped = remember(computers, saved, inUseId) {
+        if (saved == null) emptyList() else ScreenMap.unmapped(computers, saved!!, inUseId)
     }
-    val pick = remember(allDesktops, explicitPick, aimedId) { DesktopHub.targetPick(explicitPick, aimedId) }
-    val minDrag = with(density) { 36.dp.toPx() }
-    val dragIndex = if (dragging && !launching) {
-        FlickSectors.sectorFor(offset.value.x, offset.value.y, online.size, minDrag)
-    } else null
-    val dragLitId = dragIndex?.let { online.getOrNull(it)?.name }
+    var setupTargets by remember { mutableStateOf<List<ScreenTarget>?>(null) }
+    var setupCurrent by remember { mutableStateOf<ScreenTarget?>(null) }
+    var aimed by remember { mutableStateOf<ScreenTarget?>(null) }
+    val inSetup = setupTargets != null
+
+    val savedNow by rememberUpdatedState(saved)
+    val inSetupNow by rememberUpdatedState(inSetup)
+    val launchingNow by rememberUpdatedState(launching)
+
+    val pick = remember(allDesktops, aimed) { DesktopHub.targetPick(aimed = aimed?.computer) }
+    // The aimed screen, when it is what decided the target.
+    val aimScreen = aimed?.takeIf { a ->
+        pick != null && pick.reason == TargetRule.Reason.AIM && PairedDesktops.sameName(a.computer, pick.id)
+    }
     val litId = when {
         launching -> sentTo
-        dragLitId != null -> dragLitId
+        inSetup -> setupCurrent?.computer
         else -> pick?.id
+    }
+
+    fun close() {
+        if (closing) return
+        closing = true
+        scope.launch {
+            dim.animateTo(0f, tween(180))
+            onFinish()
+        }
+    }
+
+    fun startSetup(list: List<ScreenTarget>) {
+        if (list.isEmpty() || inSetupNow) return
+        aimed = null
+        FlickPointing.aimAt(null)
+        setupTargets = list
     }
 
     LaunchedEffect(Unit) {
@@ -293,22 +343,66 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
         enter.snapTo(0f)
         enter.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow))
     }
-    LaunchedEffect(dragLitId) {
-        if (dragging && dragLitId != null) haptics.tick()
+
+    // Ask every computer for its screens, then run Point setup when it's needed (SPACE.md §7.5).
+    LaunchedEffect(Unit) {
+        DesktopHub.requestScreens()
+        if (!compass) {
+            if (setupOnly) {
+                Toast.makeText(context, "This phone has no compass, so pointing can't be set up", Toast.LENGTH_LONG).show()
+                close()
+            }
+            return@LaunchedEffect
+        }
+        val started = System.currentTimeMillis()
+        while (true) {
+            val waited = System.currentTimeMillis() - started
+            val cs = FlickPointing.computers()
+            val settled = cs.isNotEmpty() && cs.all { it.screens != null }
+            if (savedNow != null && (settled || waited >= SCREENS_WAIT_MS)) break
+            if (waited >= 2_000L) break
+            delay(50)
+        }
+        val cs = FlickPointing.computers()
+        val inUse = DesktopHub.inUseId.value
+        if (setupOnly) {
+            val all = ScreenMap.targets(cs, inUse)
+            if (all.size >= 2) {
+                PointSetupMemory.clear()
+                startSetup(all)
+            } else {
+                Toast.makeText(context, "Point setup needs two or more screens on connected computers", Toast.LENGTH_LONG).show()
+                close()
+            }
+        } else if (!dragging && !launching) {
+            val missing = ScreenMap.unmapped(cs, savedNow.orEmpty(), inUse)
+            if (missing.isNotEmpty() && !PointSetupMemory.allSkipped(missing)) startSetup(missing)
+        }
     }
 
-    fun close() {
-        if (closing) return
-        closing = true
-        scope.launch {
-            dim.animateTo(0f, tween(180))
-            onFinish()
+    // Live aim: the nearest saved screen within 35° lights up on its computer (SPACE.md §7.4, §7.6).
+    LaunchedEffect(compass) {
+        if (!compass) return@LaunchedEffect
+        while (true) {
+            if (!inSetupNow) {
+                val reading = FlickAim.current()?.let { AimMatcher.Aim(it.first, it.second) }
+                val hit = ScreenMap.nearest(reading, savedNow.orEmpty(), FlickPointing.computers())
+                val prev = aimed
+                val same = (hit == null && prev == null) ||
+                    (hit != null && prev != null && hit.sameAs(prev.computer, prev.screen))
+                if (!same) {
+                    aimed = hit
+                    if (hit != null && !launchingNow) haptics.tick()
+                }
+                FlickPointing.aimAt(hit)
+            }
+            delay(AIM_POLL_MS)
         }
     }
 
     BackHandler { close() }
 
-    fun fire(item: FlickItem, to: String, exitXRatio: Float, velocity: Float, angle: Float) {
+    fun fire(item: FlickItem, to: String, screen: String?, exitXRatio: Float, velocity: Float, angle: Float) {
         haptics.heavy()
         val preview = previews[item.id]
         pending += scope.async(Dispatchers.IO) {
@@ -323,7 +417,8 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                 angle = angle,
                 thumbnailBase64 = preview?.thumbnailBase64,
                 text = item.text,
-                to = to
+                to = to,
+                screen = screen
             )
             if (item.uri != null) {
                 FlickSender.startFileTransfer(context, item.id, item.uri, item.name, item.mime, to = to)
@@ -333,8 +428,8 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
         }
     }
 
-    /** Throws the top card into [targetId]'s bubble. */
-    fun launchCard(v: Offset, targetId: String) {
+    /** Throws the top card into [targetId]'s bubble; it lands on [screen] there (null: the computer chooses). */
+    fun launchCard(v: Offset, targetId: String, screen: String?) {
         val item = items.firstOrNull() ?: return
         launching = true
         sentTo = targetId
@@ -361,10 +456,10 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                 // The card is on its way: tell the computer now so its card can start flying in.
                 if (!fired && (value - start).getDistance() >= dist * 0.3f) {
                     fired = true
-                    fire(item, targetId, exitX, max(mag, LAUNCH_VELOCITY), angle)
+                    fire(item, targetId, screen, exitX, max(mag, LAUNCH_VELOCITY), angle)
                 }
             }
-            if (!fired) fire(item, targetId, exitX, max(mag, LAUNCH_VELOCITY), angle)
+            if (!fired) fire(item, targetId, screen, exitX, max(mag, LAUNCH_VELOCITY), angle)
 
             // Landed in the bubble.
             haptics.tick()
@@ -388,17 +483,6 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
         }
     }
 
-    /** Where a release sends the card: the lit bubble, else the bubble the throw points at, else the default. */
-    fun targetForRelease(v: Offset): String? {
-        val n = online.size
-        val o = offset.value
-        val byDrag = FlickSectors.sectorFor(o.x, o.y, n, minDrag)
-        val byThrow = if (byDrag == null && o.getDistance() < minDrag && hypot(v.x, v.y) > LAUNCH_VELOCITY) {
-            FlickSectors.sectorFor(v.x, v.y, n)
-        } else null
-        return (byDrag ?: byThrow)?.let { online.getOrNull(it)?.name } ?: pick?.id
-    }
-
     fun release(v: Offset) {
         dragging = false
         scope.launch { grab.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium)) }
@@ -406,9 +490,11 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
         if (launching || items.isEmpty()) return
         val h = rootSize.height.toFloat()
         val wantsLaunch = v.y < -LAUNCH_VELOCITY || (offset.value.y < -LAUNCH_DISTANCE * h && v.y < 400f)
-        val target = if (wantsLaunch && connected) targetForRelease(v) else null
+        // Where the phone points right now decides (the target rule when it points at nothing).
+        val target = if (wantsLaunch && connected) pick?.id else null
         if (target != null) {
-            launchCard(v, target)
+            val screen = aimScreen?.screen?.takeIf { it.isNotEmpty() }
+            launchCard(v, target, screen)
         } else {
             scope.launch {
                 offset.animateTo(
@@ -427,6 +513,7 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
         if (!connected) 0f else max(byVelocity, byDistance * byDistance)
     }
     val glow by animateFloatAsState(glowTarget, label = "glow")
+    val cardsAlpha by animateFloatAsState(if (inSetup) 0f else 1f, tween(220), label = "cardsAlpha")
 
     Box(
         modifier = Modifier
@@ -446,18 +533,18 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                 detectDragGestures(
                     onDragStart = {
                         tracker.resetTracking()
-                        if (!launching && items.isNotEmpty()) {
+                        if (!launching && !inSetupNow && items.isNotEmpty()) {
                             dragging = true
                             scope.launch { grab.animateTo(1.05f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium)) }
                         }
                     },
                     onDragEnd = {
                         val v = tracker.calculateVelocity()
-                        release(Offset(v.x, v.y))
+                        if (dragging) release(Offset(v.x, v.y))
                     },
-                    onDragCancel = { release(Offset.Zero) },
+                    onDragCancel = { if (dragging) release(Offset.Zero) },
                     onDrag = { change, amount ->
-                        if (!launching && items.isNotEmpty()) {
+                        if (dragging && !launching && items.isNotEmpty()) {
                             change.consume()
                             tracker.addPosition(change.uptimeMillis, change.position)
                             scope.launch { offset.snapTo(offset.value + amount) }
@@ -470,7 +557,7 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
         val cardWidth = with(density) { min((rootSize.width * 0.64f).toDp(), 300.dp) }
         val cardHeight = cardWidth * 1.3f
 
-        // Header: title, the device bubbles, and where a flick goes right now.
+        // Header: title, where a flick goes now, and the device bubbles.
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -492,16 +579,26 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Throw it at a device",
-                        color = Color.White.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.bodyMedium
+                        text = when {
+                            inSetup -> "Point setup"
+                            !connected -> "No computer connected"
+                            launching && sentTo != null -> "→ $sentTo"
+                            else -> "→ " + (aimScreen?.title() ?: pick?.id ?: "computer")
+                        },
+                        color = if (connected && !inSetup) FlickCyan else Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (connected && !inSetup) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                IconButton(onClick = {
-                    haptics.tick()
-                    context.startActivity(Intent(context, FlickSettingsActivity::class.java))
-                }) {
-                    Icon(Icons.Rounded.Tune, contentDescription = "Flick settings", tint = Color.White.copy(alpha = 0.85f))
+                if (!setupOnly) {
+                    IconButton(onClick = {
+                        haptics.tick()
+                        context.startActivity(Intent(context, FlickSettingsActivity::class.java))
+                    }) {
+                        Icon(Icons.Rounded.Tune, contentDescription = "Flick settings", tint = Color.White.copy(alpha = 0.85f))
+                    }
                 }
             }
 
@@ -511,15 +608,11 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                 DeviceBubbleArc(
                     devices = bubbles,
                     litId = litId,
-                    aimedId = aimedId,
+                    aimedId = if (inSetup) null else aimScreen?.computer,
                     pulseId = pulseId,
                     pulse = pulse.value,
                     modifier = Modifier.padding(horizontal = 8.dp),
-                    onPositioned = { id, p -> bubbleCenters[id] = p },
-                    onTap = { id ->
-                        haptics.tick()
-                        explicitPick = if (explicitPick != null && PairedDesktops.sameName(explicitPick!!, id)) null else id
-                    }
+                    onPositioned = { id, p -> bubbleCenters[id] = p }
                 )
             } else {
                 Surface(
@@ -544,9 +637,8 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
 
             Spacer(Modifier.height(26.dp))
 
-            if (connected) {
-                val target = dragLitId ?: pick?.id
-                val reason = if (dragLitId != null) null else pick?.reason
+            if (connected && !inSetup && !setupOnly) {
+                val reason = pick?.reason
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 24.dp)
@@ -561,15 +653,13 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = if (dragLitId != null) "Let go to send to $target" else "Flick up to send to $target",
+                        text = "Flick up to send",
                         color = Color.White,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        maxLines = 1
                     )
-                    if (reason != null && online.size > 1) {
+                    if (reason != null && (online.size > 1 || targets.size > 1)) {
                         Spacer(Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
@@ -581,16 +671,32 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                         }
                     }
                 }
-                if (online.size > 1) {
-                    Text(
-                        text = if (explicitPick != null) "Tap it again to go back to automatic" else "Drag toward a bubble, or tap one to pick it",
-                        color = Color.White.copy(alpha = 0.55f),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+                if (compass && targets.size > 1) {
+                    if (unmapped.isNotEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (unmapped.size == 1) "One screen isn't set up for pointing" else "${unmapped.size} screens aren't set up for pointing",
+                                color = Color.White.copy(alpha = 0.55f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            TextButton(onClick = {
+                                haptics.tick()
+                                startSetup(unmapped)
+                            }) {
+                                Text("Set up", color = FlickCyan, style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = "Point your phone at a screen to pick it",
+                            color = Color.White.copy(alpha = 0.55f),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                 }
             }
-            if (items.size > 1) {
+            if (items.size > 1 && !inSetup) {
                 Text(
                     text = "${items.size} items — one flick each",
                     color = Color.White.copy(alpha = 0.65f),
@@ -620,12 +726,12 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                             rotationZ = (o.x / size.width) * 14f * throwScale.value
                             scaleX = s * grab.value * throwScale.value
                             scaleY = s * grab.value * throwScale.value
-                            alpha = dim.value * throwAlpha.value
+                            alpha = dim.value * throwAlpha.value * cardsAlpha
                         } else {
                             translationY = depth * 18.dp.toPx()
                             scaleX = s
                             scaleY = s
-                            alpha = dim.value * (1f - 0.25f * depth)
+                            alpha = dim.value * (1f - 0.25f * depth) * cardsAlpha
                         }
                     }
             ) {
@@ -633,16 +739,34 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
             }
         }
 
+        // Point setup (SPACE.md §7.5): over the card, with its own Skip.
+        setupTargets?.let { list ->
+            PointSetupPanel(
+                targets = list,
+                haptics = haptics,
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = dim.value },
+                onCurrent = { setupCurrent = it },
+                onDone = { skipped ->
+                    if (skipped.isNotEmpty()) PointSetupMemory.skip(skipped)
+                    setupTargets = null
+                    setupCurrent = null
+                    if (setupOnly) close()
+                }
+            )
+        }
+
         // Bottom: cancel
-        TextButton(
-            onClick = { close() },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 20.dp)
-                .graphicsLayer { alpha = dim.value }
-        ) {
-            Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+        if (!inSetup) {
+            TextButton(
+                onClick = { close() },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 20.dp)
+                    .graphicsLayer { alpha = dim.value }
+            ) {
+                Text(if (setupOnly) "Close" else "Cancel", color = Color.White.copy(alpha = 0.8f))
+            }
         }
 
         // "Sent to …"

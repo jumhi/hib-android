@@ -2,13 +2,10 @@ package com.sameerasw.airsync.presentation.ui.activities
 
 import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.MyLocation
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,11 +54,12 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sameerasw.airsync.multidesk.AimMatcher
-import com.sameerasw.airsync.multidesk.BubbleDevice
 import com.sameerasw.airsync.multidesk.DesktopHub
-import com.sameerasw.airsync.multidesk.DeviceBubbleArc
-import com.sameerasw.airsync.multidesk.FlickAimStore
+import com.sameerasw.airsync.multidesk.FlickScreenStore
 import com.sameerasw.airsync.multidesk.PairedDesktops
+import com.sameerasw.airsync.multidesk.ScreenComputer
+import com.sameerasw.airsync.multidesk.ScreenMap
+import com.sameerasw.airsync.multidesk.deviceIcon
 import com.sameerasw.airsync.ui.theme.AirSyncTheme
 import com.sameerasw.airsync.utils.FlickAim
 import com.sameerasw.airsync.utils.HapticUtil
@@ -69,8 +68,8 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * H.I.B — Flick settings. "Teach aim": for each computer, point the phone at it and tap its bubble; once
- * two or more are taught, pointing the phone at one picks it on the Flick screen (nearest within 35°).
+ * H.I.B — Flick settings. Point & Flick (SPACE.md §7): every screen of every connected computer, whether
+ * Point setup has mapped it, where the phone points now, and "Point setup again".
  */
 class FlickSettingsActivity : ComponentActivity() {
 
@@ -127,7 +126,7 @@ private fun FlickSettingsScreen(onBack: () -> Unit) {
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            TeachAimCard()
+            PointAndFlickCard()
             HowItPicksCard()
             Spacer(Modifier.height(24.dp))
         }
@@ -135,24 +134,30 @@ private fun FlickSettingsScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun TeachAimCard() {
+private fun PointAndFlickCard() {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val desktops by DesktopHub.desktops.collectAsState()
-    val taughtFlow = remember { FlickAimStore.flow(context) }
-    val taught by taughtFlow.collectAsState(initial = emptyMap())
+    val screensByComputer by DesktopHub.screens.collectAsState()
+    val inUseId by DesktopHub.inUseId.collectAsState()
+    val savedFlow = remember { FlickScreenStore.flow(context) }
+    val saved by savedFlow.collectAsState(initial = emptyList())
+    val compass = remember { FlickAim.isAvailable(context) }
     var reading by remember { mutableStateOf<AimMatcher.Aim?>(null) }
-    var justTaught by remember { mutableStateOf<String?>(null) }
-    val pulse = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
+        DesktopHub.requestScreens()
         while (true) {
             reading = FlickAim.current()?.let { AimMatcher.Aim(it.first, it.second) }
             delay(100)
         }
     }
-    val aimed = AimMatcher.nearest(reading, taught)
+    val computers = desktops.filter { it.isConnected }.map {
+        ScreenComputer(it.name, screensByComputer[PairedDesktops.normalizeName(it.name)])
+    }
+    val targets = ScreenMap.targets(computers, inUseId)
+    val aimed = ScreenMap.nearest(reading, saved, computers)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -160,15 +165,25 @@ private fun TeachAimCard() {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceBright)
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text("Teach aim", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text("Point & Flick", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Stand where you usually flick. Point the top of your phone at a computer, then tap its bubble. " +
-                    "Do it for each computer. With two or more taught, pointing at one picks it on the Flick screen.",
+                "Point your phone at a screen and flick: the card lands on that screen, on whichever computer it " +
+                    "belongs to. The screen glows while you point at it. Point setup maps where each screen is; " +
+                    "it runs by itself the first time you flick.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(14.dp))
+
+            if (!compass) {
+                Text(
+                    "This phone has no compass, so Flick goes by the order below instead of pointing.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                return@Column
+            }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -179,100 +194,95 @@ private fun TeachAimCard() {
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = reading?.let { r ->
-                        val e = r.elevation.roundToInt()
-                        "Pointing ${r.heading.roundToInt()}° · ${if (e >= 0) "$e° up" else "${-e}° down"}"
-                    } ?: "Waiting for the compass…",
+                    text = when {
+                        reading == null -> "Waiting for the compass…"
+                        aimed != null -> "Pointing at ${aimed.title()}"
+                        targets.size > 1 -> "Not pointing at a screen"
+                        else -> {
+                            val r = reading!!
+                            val e = r.elevation.roundToInt()
+                            "Pointing ${r.heading.roundToInt()}° · ${if (e >= 0) "$e° up" else "${-e}° down"}"
+                        }
+                    },
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
 
-            if (desktops.isEmpty()) {
-                Text(
+            when {
+                desktops.isEmpty() -> Text(
                     "Pair a computer first (Your devices → Add computer).",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            } else {
-                val bubbles = desktops.map { d ->
-                    val isTaught = taught.keys.any { PairedDesktops.sameName(it, d.name) }
-                    BubbleDevice(
-                        id = d.name, name = d.name, platform = d.platform, inUse = d.inUse,
-                        subtitle = if (isTaught) "Taught" else "Tap to teach"
-                    )
-                }
-                DeviceBubbleArc(
-                    devices = bubbles,
-                    litId = justTaught ?: aimed,
-                    aimedId = aimed,
-                    pulseId = justTaught,
-                    pulse = pulse.value,
-                    arcDepth = 12.dp,
-                    accent = MaterialTheme.colorScheme.primary,
-                    onAccent = MaterialTheme.colorScheme.onPrimary,
-                    container = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    onContainer = MaterialTheme.colorScheme.onSurface,
-                    label = MaterialTheme.colorScheme.onSurface,
-                    onTap = { id ->
-                        val r = reading
-                        if (r == null) {
-                            Toast.makeText(context, "The compass isn't ready yet — move the phone a little", Toast.LENGTH_SHORT).show()
-                            return@DeviceBubbleArc
-                        }
-                        HapticUtil.performClick(haptics)
-                        scope.launch {
-                            FlickAimStore.teach(context, id, r)
-                            justTaught = id
-                            pulse.snapTo(1f)
-                            pulse.animateTo(0f, tween(600))
-                            delay(400)
-                            justTaught = null
-                        }
-                    }
-                )
-            }
-
-            Spacer(Modifier.height(18.dp))
-            val count = taught.size
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Rounded.MyLocation,
-                    contentDescription = null,
-                    tint = if (count >= AimMatcher.MIN_TAUGHT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = when {
-                        count >= AimMatcher.MIN_TAUGHT && aimed != null -> "Aim is on — pointing at $aimed"
-                        count >= AimMatcher.MIN_TAUGHT -> "Aim is on — not pointing at a computer"
-                        count == 1 -> "Teach one more computer to turn aim on"
-                        else -> "Teach two computers to turn aim on"
-                    },
+                computers.isEmpty() -> Text(
+                    "Connect a computer to see its screens.",
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-
-            if (taught.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                taught.keys.sortedBy { it.lowercase() }.forEach { id ->
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        val a = taught[id]
-                        Text(
-                            text = "$id · ${a?.heading?.roundToInt() ?: 0}°",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
+                else -> targets.forEach { t ->
+                    val isSet = ScreenMap.isSaved(t, saved)
+                    val lit = aimed != null && t.sameAs(aimed.computer, aimed.screen)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        val platform = desktops.firstOrNull { PairedDesktops.sameName(it.name, t.computer) }?.platform
+                        Icon(
+                            deviceIcon(platform),
+                            contentDescription = null,
+                            tint = if (lit) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
                         )
-                        TextButton(onClick = { scope.launch { FlickAimStore.forget(context, id) } }) { Text("Forget") }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = t.title(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (lit) FontWeight.SemiBold else FontWeight.Normal,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            val detail = ScreenMap.friendlyName(
+                                com.sameerasw.airsync.multidesk.ComputerScreen(t.screen, t.displayName)
+                            )?.takeIf { it != t.label && t.screensOnComputer > 1 }
+                            if (detail != null) {
+                                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Text(
+                            text = if (isSet) "Set" else "Not set up",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (isSet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
                     }
                 }
-                if (taught.size > 1) {
-                    TextButton(onClick = { scope.launch { FlickAimStore.forgetAll(context) } }) { Text("Forget all") }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            if (targets.size >= 2) {
+                Button(
+                    onClick = {
+                        HapticUtil.performClick(haptics)
+                        context.startActivity(FlickActivity.pointSetupIntent(context))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Rounded.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Point setup again")
+                }
+            } else if (computers.isNotEmpty()) {
+                Text(
+                    "With one screen there's nothing to point at: every flick goes to it. Point setup starts once " +
+                        "a second screen or computer is connected.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (saved.isNotEmpty()) {
+                TextButton(onClick = { scope.launch { FlickScreenStore.forgetAll(context) } }) {
+                    Text("Forget all screens")
                 }
             }
         }
@@ -290,11 +300,10 @@ private fun HowItPicksCard() {
             Text("Where a flick goes", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(6.dp))
             listOf(
-                "1. The bubble you tap or throw at",
-                "2. The computer you point the phone at (with aim taught)",
-                "3. The computer you're using right now (In use)",
-                "4. The computer you used last",
-                "5. Your main computer"
+                "1. The screen you point the phone at",
+                "2. The computer you're using right now (In use)",
+                "3. The computer you used last",
+                "4. Your main computer"
             ).forEach {
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

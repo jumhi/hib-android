@@ -23,7 +23,7 @@ import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * H.I.B — Flick: the wire side (the computer it goes to is picked on the Flick screen).
+ * H.I.B — Flick: the wire side (the computer and screen it goes to are picked on the Flick screen).
  *
  * 1. [sendFlickStart] fires the instant a card is thrown, so the computer can launch its card before a
  *    single byte of the file has moved.
@@ -100,7 +100,9 @@ object FlickSender {
         angle: Float,
         thumbnailBase64: String?,
         text: String?,
-        to: String? = target
+        to: String? = target,
+        /** The screen the phone points at (SPACE.md §7.4); null or "" lets the computer choose. */
+        screen: String? = null
     ): Boolean {
         val data = JSONObject().apply {
             put("id", id)
@@ -113,7 +115,8 @@ object FlickSender {
             put("angle", angle.toDouble())
             if (!thumbnailBase64.isNullOrEmpty()) put("thumbnail", thumbnailBase64)
             if (text != null) put("text", text.take(MAX_TEXT_CHARS))
-            // Where the phone is pointing, so a computer with several screens can pick one.
+            if (!screen.isNullOrEmpty()) put("screen", screen)
+            // Where the phone is pointing, for computers that don't know `screen` yet.
             FlickAim.current()?.let { (heading, elevation) ->
                 put("heading", heading.toDouble())
                 put("elevation", elevation.toDouble())

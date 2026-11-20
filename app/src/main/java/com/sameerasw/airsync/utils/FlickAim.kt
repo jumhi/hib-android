@@ -15,14 +15,19 @@ import kotlin.math.sqrt
  * The aim direction is the sum of the phone's "top" axis and its "back" axis in world
  * coordinates, so it works whether the phone is held flat-ish (top points at the screen)
  * or upright (back points at the screen). Reported as a compass heading (degrees clockwise
- * from north) and an elevation (degrees above the horizon). The Mac uses it to pick which
- * display a flicked card lands on.
+ * from north) and an elevation (degrees above the horizon). Point & Flick matches it against
+ * the saved screen map to pick the computer and the screen a flicked card lands on.
  */
 object FlickAim : SensorEventListener {
     @Volatile private var heading: Float? = null
     @Volatile private var elevation: Float? = null
     private var manager: SensorManager? = null
     private val rotation = FloatArray(9)
+
+    /** True when the phone has the rotation-vector sensor Point & Flick needs. */
+    fun isAvailable(context: Context): Boolean =
+        (context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager)
+            ?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null
 
     fun start(context: Context) {
         val sm = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager ?: return

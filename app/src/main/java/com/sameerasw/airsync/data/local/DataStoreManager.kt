@@ -1116,10 +1116,11 @@ class DataStoreManager(private val context: Context) {
     }
 
     // H.I.B Space (docs/SPACE.md): the space key shared with every computer, "last used" times per
-    // computer for the target rule, and the Flick aim directions the user taught per computer.
+    // computer for the target rule, and the Point & Flick screen map (§7.6). The old per-computer aims
+    // ("hib_flick_aim_v1") are no longer used.
     private val spaceKeyKey = stringPreferencesKey("hib_space_key_v1")
     private val lastUsedKey = stringPreferencesKey("hib_last_used_v1")
-    private val flickAimKey = stringPreferencesKey("hib_flick_aim_v1")
+    private val flickScreensKey = stringPreferencesKey("hib_flick_screens_v1")
 
     /** The space key: made once (32 random bytes, base64) and kept until H.I.B is reset on the phone. */
     suspend fun getOrCreateSpaceKey(): String {
@@ -1141,9 +1142,10 @@ class DataStoreManager(private val context: Context) {
         context.dataStore.edit { it[lastUsedKey] = json }
     }
 
-    fun getFlickAimJson(): Flow<String?> = context.dataStore.data.map { it[flickAimKey] }
+    /** Point & Flick: JSON list of {computer, screen, name, h, e} (see multidesk.ScreenMap). */
+    fun getFlickScreensJson(): Flow<String?> = context.dataStore.data.map { it[flickScreensKey] }
 
-    suspend fun updateFlickAimJson(transform: (String?) -> String) {
-        context.dataStore.edit { it[flickAimKey] = transform(it[flickAimKey]) }
+    suspend fun updateFlickScreensJson(transform: (String?) -> String) {
+        context.dataStore.edit { it[flickScreensKey] = transform(it[flickScreensKey]) }
     }
 }
