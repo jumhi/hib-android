@@ -668,9 +668,15 @@ object WebSocketMessageHandler {
                             "Updating device: name='${if (macName.isNotBlank()) macName else last.name}', isPlus=$isPlus, model='$model', type='$deviceType'"
                         )
 
+                        // The key/address the socket really used: "last" may still be another computer.
+                        val record = com.sameerasw.airsync.multidesk.PairingKeys.handshakeRecord(
+                            last, macName,
+                            socketKey = WebSocketUtil.currentKeyString,
+                            socketIp = WebSocketUtil.currentIpAddress,
+                            socketPort = WebSocketUtil.currentPortValue
+                        )
                         ds.saveLastConnectedDevice(
-                            last.copy(
-                                name = if (macName.isNotBlank()) macName else last.name,
+                            record.copy(
                                 isPlus = isPlus,
                                 lastConnected = System.currentTimeMillis(),
                                 model = model,
@@ -683,9 +689,9 @@ object WebSocketMessageHandler {
                         // Also update the network-aware device storage if possible
                         try {
                             val ourIp = DeviceInfoUtil.getWifiIpAddress(context) ?: ""
-                            val clientIp = last.ipAddress
-                            val port = last.port
-                            val symmetricKey = last.symmetricKey
+                            val clientIp = record.ipAddress
+                            val port = record.port
+                            val symmetricKey = record.symmetricKey
 
                             if (clientIp.isNotBlank() && ourIp.isNotBlank()) {
                                 ds.saveNetworkDeviceConnection(

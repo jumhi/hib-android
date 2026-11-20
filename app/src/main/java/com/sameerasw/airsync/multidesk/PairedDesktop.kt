@@ -162,3 +162,33 @@ object PairedDesktopCodec {
         return arr.toString()
     }
 }
+
+/**
+ * Which pairing key the phone uses for a computer. Every computer has its own key, so one must never be
+ * filed under another's name (the PC's key once ended up on the Mac's record and the Mac refused the phone).
+ */
+object PairingKeys {
+    /** The key last seen working for [name]: the paired-computers list is only written after a handshake. */
+    fun verifiedKey(paired: List<PairedDesktop>, name: String): String? =
+        PairedDesktops.find(paired, name)?.key?.takeIf { it.isNotBlank() }
+
+    /**
+     * The "last computer" record after [macName] answered on the main link. The key, address and port are
+     * the ones that socket actually used — not those of whichever computer happened to be saved before.
+     */
+    fun handshakeRecord(
+        last: com.sameerasw.airsync.domain.model.ConnectedDevice,
+        macName: String,
+        socketKey: String?,
+        socketIp: String?,
+        socketPort: Int?
+    ): com.sameerasw.airsync.domain.model.ConnectedDevice {
+        val ip = socketIp?.trim()?.takeIf { it.isNotEmpty() && !it.contains(',') }
+        return last.copy(
+            name = macName.ifBlank { last.name },
+            symmetricKey = socketKey?.takeIf { it.isNotBlank() } ?: last.symmetricKey,
+            ipAddress = ip ?: last.ipAddress,
+            port = socketPort?.toString() ?: last.port
+        )
+    }
+}

@@ -118,6 +118,13 @@ object WakeupHandler {
         macName: String
     ): String? {
         try {
+            // A key that has worked for this very computer beats the older per-name records,
+            // which could hold another computer's key.
+            val paired = com.sameerasw.airsync.multidesk.PairedDesktopCodec.decode(
+                dataStoreManager.getPairedDesktopsJson().first()
+            )
+            com.sameerasw.airsync.multidesk.PairingKeys.verifiedKey(paired, macName)?.let { return it }
+
             val networkDevices = dataStoreManager.getAllNetworkDeviceConnections().first()
             val ourIp = DeviceInfoUtil.getWifiIpAddress(context)
             val cleanMacName = cleanDeviceName(macName)
