@@ -179,6 +179,13 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
 
+        // H.I.B: long-press on the "Play on computer" tile opens its device chooser, not the main screen.
+        if (com.sameerasw.airsync.service.PlayOnComputerTileService.isTilePreferences(intent)) {
+            startActivity(com.sameerasw.airsync.presentation.ui.activities.PlayOnChooserActivity.intent(this))
+            finish()
+            return
+        }
+
         ExceptionReport(this) { deviceInfo, stackTrace ->
             CrashHandler.onCrash(applicationContext, deviceInfo, stackTrace)
         }.setCustomActivity(CrashReportActivity::class.java)
@@ -577,6 +584,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (com.sameerasw.airsync.service.PlayOnComputerTileService.isTilePreferences(intent)) {
+            startActivity(com.sameerasw.airsync.presentation.ui.activities.PlayOnChooserActivity.intent(this))
+            return
+        }
         setIntent(intent)
 
         // Recreate the Compose state when a pairing deep link is delivered to an existing

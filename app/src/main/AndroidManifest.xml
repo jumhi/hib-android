@@ -186,6 +186,14 @@
             android:label="Flick settings"
             android:theme="@style/Theme.AirSync" />
 
+        <!-- H.I.B: Play on… chooser (long-press on the Play on computer tile) -->
+        <activity
+            android:name=".presentation.ui.activities.PlayOnChooserActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.AirSync.Transparent" />
+
         <!-- H.I.B: opens / shares a file a computer flicked to the phone (from its notification) -->
         <activity
             android:name=".multidesk.ReceivedFileActivity"
@@ -266,6 +274,18 @@
             android:exported="true"
             android:icon="@drawable/ic_laptop_24"
             android:label="@string/qs_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- H.I.B: Play on computer Quick Settings tile (tap = play/stop, long-press = choose) -->
+        <service
+            android:name=".service.PlayOnComputerTileService"
+            android:exported="true"
+            android:icon="@drawable/rounded_music_cast_24"
+            android:label="@string/play_on_computer_tile"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />

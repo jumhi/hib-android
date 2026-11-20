@@ -827,6 +827,10 @@ fun AirSyncMainScreen(
                                         .fillMaxWidth()
                                 )
 
+                                // H.I.B Space: Play / Flick work with any connected computer, not only the main one.
+                                val hubDesktops by com.sameerasw.airsync.multidesk.DesktopHub.desktops.collectAsState()
+                                val anyComputer = uiState.isConnected || hubDesktops.any { it.isConnected }
+
                                 RoundedCardContainer {
 
                                     // Rating Prompt Card
@@ -856,7 +860,7 @@ fun AirSyncMainScreen(
                                         }
                                     )
 
-                                    // H.I.B multi-desktop: every paired computer (Mac + Windows) at once
+                                    // H.I.B Space: "Your devices" — every paired computer (Mac + Windows) with its state
                                     AnimatedVisibility(
                                         visible = uiState.lastConnectedDevice != null && !uiState.isAppPaused,
                                         enter = expandVertically() + fadeIn(),
@@ -876,13 +880,13 @@ fun AirSyncMainScreen(
                                         )
                                     }
 
-                                    // H.I.B: Play on Mac (phone audio through the Mac's speakers)
+                                    // H.I.B: Play on… (phone audio through one computer's speakers)
                                     AnimatedVisibility(
-                                        visible = uiState.isConnected,
+                                        visible = anyComputer,
                                         enter = expandVertically() + fadeIn(),
                                         exit = shrinkVertically() + fadeOut()
                                     ) {
-                                        com.sameerasw.airsync.presentation.ui.components.cards.PlayOnMacCard()
+                                        com.sameerasw.airsync.presentation.ui.components.cards.PlayOnCard()
                                     }
 
                                     // H.I.B: Scenes the Mac marked "Show on phone"
@@ -903,9 +907,9 @@ fun AirSyncMainScreen(
                                         com.sameerasw.airsync.scenes.DndAccessPrompt()
                                     }
 
-                                    // H.I.B: Flick to Mac (pick photos/videos, flick them onto the Mac's desktop)
+                                    // H.I.B: Flick (pick photos/videos, throw them at a computer)
                                     AnimatedVisibility(
-                                        visible = uiState.isConnected,
+                                        visible = anyComputer,
                                         enter = expandVertically() + fadeIn(),
                                         exit = shrinkVertically() + fadeOut()
                                     ) {

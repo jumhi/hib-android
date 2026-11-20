@@ -27,6 +27,7 @@
     <string name="your_mac">Your Mac</string>
     <string name="quick_share_send_label">Send</string>
     <string name="flick_to_mac_label">Flick</string>
+    <string name="play_on_computer_tile">Play on computer</string>
     <string name="disconnected">Disconnected</string>
     <string name="paused">Paused</string>
     <string name="pause">Pause</string>
