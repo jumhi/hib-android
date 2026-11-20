@@ -431,11 +431,12 @@ class AirSyncService : Service() {
         fun isRunning(): Boolean = serviceInstance != null
 
         fun startScanning(context: Context) {
-            runBlocking {
+            // Never block the caller (often the main thread) on DataStore.
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                 val dataStoreManager = DataStoreManager.getInstance(context)
                 if (dataStoreManager.isAppPaused().first()) {
                     Log.d(TAG, "App is paused, ignoring startScanning")
-                    return@runBlocking
+                    return@launch
                 }
                 val intent = Intent(context, AirSyncService::class.java).apply {
                     action = ACTION_START_SCANNING
@@ -445,11 +446,12 @@ class AirSyncService : Service() {
         }
 
         fun start(context: Context, deviceName: String?) {
-            runBlocking {
+            // Never block the caller (often the main thread) on DataStore.
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                 val dataStoreManager = DataStoreManager.getInstance(context)
                 if (dataStoreManager.isAppPaused().first()) {
                     Log.d(TAG, "App is paused, ignoring start")
-                    return@runBlocking
+                    return@launch
                 }
                 val intent = Intent(context, AirSyncService::class.java).apply {
                     action = ACTION_START_SYNC

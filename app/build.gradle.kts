@@ -93,8 +93,8 @@ dependencies {
     implementation("com.airbnb.android:lottie-compose:6.7.1")
 
     // DataStore for state persistence
-    implementation("androidx.datastore:datastore-preferences:1.3.0")
-    implementation("androidx.datastore:datastore-core:1.3.0")
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
+    implementation("androidx.datastore:datastore-core:1.1.7")
 
     // ViewModel and state handling
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.1")
