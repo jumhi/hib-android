@@ -12,7 +12,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
-import io.ktor.server.engine.ApplicationEngine
+import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.path
@@ -34,7 +34,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 class WebDavServer(private val context: Context) {
-    private var engine: ApplicationEngine? = null
+    private var engine: EmbeddedServer<*, *>? = null
     private val port = 9081
     private val TAG = "WebDavServer"
 

@@ -55,7 +55,7 @@ android {
         compose = true
         buildConfig = true
     }
-    compileSdkMinor = 0
+    compileSdkMinor = 1
 
     defaultConfig {
         targetSdk = 37
@@ -79,49 +79,49 @@ dependencies {
     implementation("com.kieronquinn.smartspacer:sdk-plugin:1.1")
 
     // Material Components (XML themes: Theme.Material3.*)
-    implementation("com.google.android.material:material:1.12.0")
+    implementation("com.google.android.material:material:1.14.0")
 
     // H.I.B: Touch ID on Phone (BiometricPrompt for Mac approvals)
     implementation("androidx.biometric:biometric:1.1.0")
 
     // Android 12+ SplashScreen API with backward compatibility attributes
-    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.core:core-splashscreen:1.2.0")
 
-    implementation("androidx.compose.material3:material3:1.5.0-alpha10")
+    implementation("androidx.compose.material3:material3:1.5.0")
     implementation("androidx.compose.material:material-icons-core:1.7.8")
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
-    implementation("com.airbnb.android:lottie-compose:6.4.0")
+    implementation("com.airbnb.android:lottie-compose:6.7.1")
 
     // DataStore for state persistence
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
-    implementation("androidx.datastore:datastore-core:1.1.1")
+    implementation("androidx.datastore:datastore-preferences:1.3.0")
+    implementation("androidx.datastore:datastore-core:1.3.0")
 
     // ViewModel and state handling
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
-    implementation("androidx.compose.runtime:runtime-livedata:1.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.1")
+    implementation("androidx.compose.runtime:runtime-livedata:1.13.0")
 
     // Navigation Compose
-    implementation("androidx.navigation:navigation-compose:2.7.6")
+    implementation("androidx.navigation:navigation-compose:2.10.2")
 
     // WebSocket support
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.1")
 
     // JSON parsing for GitHub API
-    implementation("com.google.code.gson:gson:2.10.1")
+    implementation("com.google.code.gson:gson:2.15.0")
 
     // Media session support for Mac media player
-    implementation("androidx.media:media:1.7.0")
+    implementation("androidx.media:media:1.8.0")
 
     implementation(libs.ui.graphics)
     implementation(libs.androidx.foundation)
 
 
     // CameraX for QR scanning
-    implementation("androidx.camera:camera-core:1.4.0")
-    implementation("androidx.camera:camera-camera2:1.4.0")
-    implementation("androidx.camera:camera-lifecycle:1.4.0")
-    implementation("androidx.camera:camera-view:1.4.0")
-    implementation("androidx.camera:camera-mlkit-vision:1.4.0")
+    implementation("androidx.camera:camera-core:1.7.0")
+    implementation("androidx.camera:camera-camera2:1.7.0")
+    implementation("androidx.camera:camera-lifecycle:1.7.0")
+    implementation("androidx.camera:camera-view:1.7.0")
+    implementation("androidx.camera:camera-mlkit-vision:1.7.0")
 
     // Room database for call history
     implementation(libs.androidx.room.runtime)
@@ -143,8 +143,8 @@ dependencies {
     implementation(libs.play.review.ktx)
 
     // Coil for image and GIF loading
-    implementation("io.coil-kt:coil-compose:2.6.0")
-    implementation("io.coil-kt:coil-gif:2.6.0")
+    implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.coil-kt:coil-gif:2.7.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

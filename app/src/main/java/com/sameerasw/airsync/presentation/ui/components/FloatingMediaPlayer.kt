@@ -378,7 +378,9 @@ fun FloatingMediaPlayer(
                                 .fillMaxWidth()
                                 .height(60.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            overflowIndicator = {},
                             content = {
+                                item {
                                 FilledTonalIconButton(
                                     onClick = { onMediaAction("media_prev") },
                                     modifier = Modifier
@@ -391,7 +393,9 @@ fun FloatingMediaPlayer(
                                         modifier = Modifier.size(36.dp)
                                     )
                                 }
+                                }
 
+                                item {
                                 FilledIconButton(
                                     onClick = {
                                         playerRippleOrigin = expandedPlayButtonCenter
@@ -420,7 +424,9 @@ fun FloatingMediaPlayer(
                                         modifier = Modifier.size(48.dp)
                                     )
                                 }
+                                }
 
+                                item {
                                 FilledTonalIconButton(
                                     onClick = { onMediaAction("media_next") },
                                     modifier = Modifier
@@ -432,6 +438,7 @@ fun FloatingMediaPlayer(
                                         contentDescription = "Next",
                                         modifier = Modifier.size(36.dp)
                                     )
+                                }
                                 }
                             }
                         )

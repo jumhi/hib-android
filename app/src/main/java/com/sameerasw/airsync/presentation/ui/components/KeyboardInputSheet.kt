@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Keyboard
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupScope
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
@@ -342,8 +343,10 @@ private fun CustomKeyboard(
                 .height(68.dp)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
+            overflowIndicator = {},
             content = {
                 numberRow.forEach { char ->
+                    item {
                     val numInteraction = remember { MutableInteractionSource() }
                     FilledTonalIconButton(
                         onClick = {
@@ -372,6 +375,7 @@ private fun CustomKeyboard(
                             fontWeight = FontWeight.Medium,
                         )
                     }
+                    }
                 }
             }
         )
@@ -383,10 +387,12 @@ private fun CustomKeyboard(
                 .height(68.dp)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
+            overflowIndicator = {},
             content = {
                 currentRow1.forEach { char ->
                     val displayLabel =
                         if (shiftState != ShiftState.OFF && !isSymbols) char.uppercase() else char
+                    item {
                     val row1Interaction = remember { MutableInteractionSource() }
                     FilledTonalIconButton(
                         onClick = {
@@ -419,6 +425,7 @@ private fun CustomKeyboard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+                    }
                 }
             }
         )
@@ -430,11 +437,13 @@ private fun CustomKeyboard(
                 .height(68.dp)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
+            overflowIndicator = {},
             content = {
-                if (!isSymbols) Spacer(modifier = Modifier.weight(0.5f)) // Indent for letters
+                if (!isSymbols) item { Spacer(modifier = Modifier.weight(0.5f)) } // Indent for letters
                 currentRow2.forEach { char ->
                     val displayLabel =
                         if (shiftState != ShiftState.OFF && !isSymbols) char.uppercase() else char
+                    item {
                     val row2Interaction = remember { MutableInteractionSource() }
                     FilledTonalIconButton(
                         onClick = {
@@ -467,8 +476,9 @@ private fun CustomKeyboard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+                    }
                 }
-                if (!isSymbols) Spacer(modifier = Modifier.weight(0.5f))
+                if (!isSymbols) item { Spacer(modifier = Modifier.weight(0.5f)) }
             }
         )
 
@@ -479,8 +489,10 @@ private fun CustomKeyboard(
                 .height(68.dp)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
+            overflowIndicator = {},
             content = {
                 // Shift Key - Only show if not in symbols mode
+                item {
                 if (!isSymbols) {
                     val shiftInteraction = remember { MutableInteractionSource() }
 
@@ -521,10 +533,12 @@ private fun CustomKeyboard(
                     // Spacing balance for symbols mode
                     Spacer(modifier = Modifier.weight(0.5f))
                 }
+                }
 
                 currentRow3.forEach { char ->
                     val displayLabel =
                         if (shiftState != ShiftState.OFF && !isSymbols) char.uppercase() else char
+                    item {
                     val row3Interaction = remember { MutableInteractionSource() }
                     FilledTonalIconButton(
                         onClick = {
@@ -557,9 +571,11 @@ private fun CustomKeyboard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+                    }
                 }
 
                 // Backspace Key
+                item {
                 val backspaceInteraction = remember { MutableInteractionSource() }
                 var delAccumulatedDx by remember { mutableStateOf(0f) }
                 val delSweepThreshold = 25f
@@ -609,6 +625,7 @@ private fun CustomKeyboard(
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
+                }
             }
         )
 
@@ -619,8 +636,10 @@ private fun CustomKeyboard(
                 .height(68.dp)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
+            overflowIndicator = {},
             content = {
                 // Symbols Toggle
+                item {
                 val symInteraction = remember { MutableInteractionSource() }
                 FilledIconButton(
                     onClick = {
@@ -639,8 +658,10 @@ private fun CustomKeyboard(
                         fontWeight = FontWeight.Medium,
                     )
                 }
+                }
 
                 // Comma Key
+                item {
                 val commaInteraction = remember { MutableInteractionSource() }
                 FilledIconButton(
                     onClick = {
@@ -660,8 +681,10 @@ private fun CustomKeyboard(
                         fontWeight = FontWeight.Medium,
                     )
                 }
+                }
 
                 // Space
+                item {
                 val spaceInteraction = remember { MutableInteractionSource() }
                 var accumulatedDx by remember { mutableStateOf(0f) }
                 val sweepThreshold = 25f // pixels per cursor move
@@ -716,8 +739,10 @@ private fun CustomKeyboard(
 //                        tint = MaterialTheme.colorScheme.onSurface
 //                    )
                 }
+                }
 
                 // Dot Key
+                item {
                 val dotInteraction = remember { MutableInteractionSource() }
                 FilledIconButton(
                     onClick = {
@@ -737,8 +762,10 @@ private fun CustomKeyboard(
                         fontWeight = FontWeight.Medium,
                     )
                 }
+                }
 
                 // Return
+                item {
                 val returnInteraction = remember { MutableInteractionSource() }
                 FilledIconButton(
                     onClick = {
@@ -758,6 +785,7 @@ private fun CustomKeyboard(
                         contentDescription = "Return",
                         modifier = Modifier.size(24.dp)
                     )
+                }
                 }
             }
         )
@@ -783,6 +811,7 @@ private fun NavigationRow(
             .height(56.dp)
             .padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
+        overflowIndicator = {},
         content = {
             val navKeys = listOf(
                 Triple("LEFT", Icons.AutoMirrored.Filled.KeyboardArrowLeft, MacKeycodes.LEFT),
@@ -792,6 +821,7 @@ private fun NavigationRow(
             )
 
             // Keyboard Toggle Button
+            item {
             val kbInteraction = remember { MutableInteractionSource() }
             FilledTonalIconButton(
                 onClick = {
@@ -815,8 +845,10 @@ private fun NavigationRow(
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
+            }
 
             navKeys.forEach { (name, icon, keycode) ->
+                item {
                 val interaction = remember { MutableInteractionSource() }
                 val isPressed by interaction.collectIsPressedAsState()
 
@@ -853,6 +885,7 @@ private fun NavigationRow(
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
+                }
             }
 
         }
@@ -877,8 +910,10 @@ private fun ModifierRow(
             .height(56.dp)
             .padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
+        overflowIndicator = {},
         content = {
             // Esc key
+            item {
             val escInteraction = remember { MutableInteractionSource() }
             FilledTonalIconButton(
                 onClick = {
@@ -901,6 +936,7 @@ private fun ModifierRow(
                     fontWeight = FontWeight.Bold
                 )
             }
+            }
 
             val modifierList = listOf(
                 Triple("fn", "fn", modifiers.fn),
@@ -911,6 +947,7 @@ private fun ModifierRow(
             )
 
             modifierList.forEach { (type, iconOrText, status) ->
+                item {
                 val interaction = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
@@ -952,7 +989,16 @@ private fun ModifierRow(
                         }
                     }
                 }
+                }
             }
         }
     )
 }
+
+/**
+ * Adds a single composable as a [ButtonGroup] item (Material3 1.5 replaced the composable
+ * content lambda with an item-based scope). Items here never overflow, so the menu is empty.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+internal fun ButtonGroupScope.item(content: @Composable () -> Unit) =
+    customItem(buttonGroupContent = content, menuContent = {})
