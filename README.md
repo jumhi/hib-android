@@ -1,30 +1,46 @@
-# airsync-android
-Android app for AirSync built with Kotlin Jetpack Compose
+# H.I.B for Android
 
-Min : Android 11
+**Your Android phone and your computer, working as one.** Notifications, calls, clipboard, files,
+music, phone mirroring and **Flick** — point your phone at a screen and throw a photo, file or link
+onto it. Works with H.I.B for Windows (and the H.I.B Mac app). Made by Haitham Hamid.
 
-[<img src="https://steverichey.github.io/google-play-badge-svg/img/en_get.svg" width="30%" />](https://play.google.com/store/apps/details?id=com.sameerasw.airsync)
+## Get started
 
+1. Download `H.I.B.apk` from the [latest release](https://github.com/jumhi/hib-android/releases/latest)
+   on your phone and open it.
+   - Allow your browser to install apps when Android asks.
+   - Samsung: if it's blocked, turn off **Settings › Security and privacy › Auto Blocker** for a
+     moment, install, then turn it back on.
+2. Install H.I.B on your computer:
+   [H.I.B for Windows](https://github.com/jumhi/hib-windows#get-started-5-minutes).
+3. Open H.I.B on the phone, tap **Scan**, and scan the QR code shown on the computer.
+4. Mirroring is optional: start it from the computer and H.I.B guides you through the one-time
+   Wireless debugging setup — no terminal, nothing to install.
+
+Requires Android 11 or newer.
 
 ## Features
-- QR Code / Google Lens pairing for quick setup
-- Real-time notification mirroring and actionable replies
-- Media playback and volume control from Mac
-- Cross-device clipboard synchronization
-- **Cellular Network Monitoring**: View your Android's cellular status (LTE, 5G, No Signal) directly from your Mac's menu bar.
-- **Auto-Start Support**: Enhanced background stability with auto-start helpers for various Android OEMs (Xiaomi, OPPO, Vivo, Letv, etc.).
 
-## How to connect?
-Use your built-in camera or Google Lens or anything that can scan a QR code. It will prompt you to open the app. Once authorized, the last device will be saved on the mobile for now for easier reconnection.
+- Notifications on the computer, with replies and actions; calls; clipboard both ways; media and volume
+- **Flick:** point at a screen (any computer, any monitor) and throw photos, videos, files, links or text
+- **Devices:** the phone and every computer in one list; files between all of them
+- Phone screen mirroring, phone apps in their own windows, phone audio on the computer
+- Find My phone, ring the phone, Phone Agent
 
-## [Read Documentation and How-To](https://airsync.notion.site/)
+## Credits and licence
 
+H.I.B for Android is a modified build of [AirSync for Android](https://github.com/sameerasw/airsync-android)
+by Sameera Sandakelum (sameerasw). It is **not** affiliated with or endorsed by AirSync, and doesn't use
+its name, logo or branding. Licensed under the Mozilla Public License 2.0 with the additional terms in
+[LICENSE](LICENSE), which are kept as required. Release builds are signed by Haitham Hamid, who takes
+responsibility for the changes.
 
-## Thanks!
+### Building
 
-- To you, seriously…
-- To my community mostly known as TIDWIB (Things I Do When I’m Bored ….. see the connection)
-- May sound weird but AI, Yeah, without that deep research, assistant in helpless topics, explanations, occasional detonations and all lead to the rapid development of AirSync. Without this, how da hell do I implement a notification listener without weeks of study? Yeah, if you know how to use it efficiently, it is a damn good buddy to do things that you never could imagine.
-- All the reddit peeps for showing that this is actually a thing that they wanted.
-- All the libraries, apps and tools used for development and their creators. Issue volunteers, reddit community helpers…
-- My sleep schedule… the lack of.
+```sh
+./gradlew :app:assembleDebug          # debug build
+./gradlew :app:assembleRelease        # release; signed only if a keystore.properties is provided
+```
+
+Release signing reads `$HIB_SIGNING_PROPS` (or `~/Library/Application Support/H.I.B/signing/keystore.properties`):
+`storeFile`, `storePassword`, `keyAlias`, `keyPassword`. Never commit it.

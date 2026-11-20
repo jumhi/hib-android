@@ -1,10 +1,20 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.google.ksp)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.wire)
+}
+
+// H.I.B release signing: the keystore and its passwords live outside the repo, in a private file
+// (default ~/Library/Application Support/H.I.B/signing/keystore.properties, or $HIB_SIGNING_PROPS).
+// Without it, release builds are left unsigned.
+val hibSigningProps = Properties().apply {
+    val f = file(System.getenv("HIB_SIGNING_PROPS")
+        ?: "${System.getProperty("user.home")}/Library/Application Support/H.I.B/signing/keystore.properties")
+    if (f.isFile) f.inputStream().use { load(it) }
 }
 
 android {
@@ -18,6 +28,15 @@ android {
         versionName = "4.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("hibRelease") {
+            hibSigningProps.getProperty("storeFile")?.let { storeFile = file(it) }
+            storePassword = hibSigningProps.getProperty("storePassword")
+            keyAlias = hibSigningProps.getProperty("keyAlias")
+            keyPassword = hibSigningProps.getProperty("keyPassword")
+        }
     }
 
     buildTypes {
@@ -34,12 +53,17 @@ android {
 //        end
 
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // H.I.B: ship exactly the code that runs on the test phone (debug builds aren't shrunk);
+            // R8 can strip classes only reached by reflection, which no device test would catch.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hibSigningProps.getProperty("storeFile") != null) {
+                signingConfig = signingConfigs.getByName("hibRelease")
+            }
         }
     }
     compileOptions {
