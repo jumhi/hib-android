@@ -47,7 +47,7 @@ object DesktopRouting {
         "ping", "status", "macInfo", "macVolume", "modifierStatus", "deckState", "scenesList",
         "findRelayConfig", "fileChunk", "fileChunkAck", "flickLanded", "transferVerified",
         "screenFrame", "screenShareState", "phoneAudioState", "findMacRingState", "sceneRunResult",
-        "deckActionResult", "desktopsList"
+        "deckActionResult", "desktopsList", "desktopActivity", "flickStart"
     )
 
     const val REQUESTER_WINDOW_MS = 30_000L

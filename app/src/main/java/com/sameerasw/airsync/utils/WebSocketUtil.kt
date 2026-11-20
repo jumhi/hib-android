@@ -336,7 +336,7 @@ object WebSocketUtil {
                                             CoroutineScope(Dispatchers.Main).launch {
                                                 android.widget.Toast.makeText(
                                                     context,
-                                                    "Pairing expired. Scan the H.I.B QR code on your Mac again.",
+                                                    "Pairing expired. Scan the H.I.B QR code on your computer again.",
                                                     android.widget.Toast.LENGTH_LONG
                                                 ).show()
                                             }
@@ -648,7 +648,9 @@ object WebSocketUtil {
             // Fallback to BLE if authenticated
             val ble = com.sameerasw.airsync.AirSyncApp.getBleConnectionManager()
             if (ble != null && ble.isAuthenticated) {
-                Log.d(TAG, "WebSocket not connected, falling back to BLE: $message")
+                // Type only: payloads can carry private data (and the space key in desktopsList).
+                val bleType = Regex("\"type\"\\s*:\\s*\"([^\"]+)\"").find(message.take(128))?.groupValues?.get(1) ?: "unknown"
+                Log.d(TAG, "WebSocket not connected, falling back to BLE: $bleType")
                 return sendOverBLE(message)
             }
 

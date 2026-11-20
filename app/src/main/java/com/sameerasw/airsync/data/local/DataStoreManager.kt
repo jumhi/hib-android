@@ -1114,4 +1114,36 @@ class DataStoreManager(private val context: Context) {
             if (name.isNullOrBlank()) it.remove(flickTargetKey) else it[flickTargetKey] = name
         }
     }
+
+    // H.I.B Space (docs/SPACE.md): the space key shared with every computer, "last used" times per
+    // computer for the target rule, and the Flick aim directions the user taught per computer.
+    private val spaceKeyKey = stringPreferencesKey("hib_space_key_v1")
+    private val lastUsedKey = stringPreferencesKey("hib_last_used_v1")
+    private val flickAimKey = stringPreferencesKey("hib_flick_aim_v1")
+
+    /** The space key: made once (32 random bytes, base64) and kept until H.I.B is reset on the phone. */
+    suspend fun getOrCreateSpaceKey(): String {
+        var key: String? = null
+        context.dataStore.edit { prefs ->
+            val existing = prefs[spaceKeyKey]
+            key = if (com.sameerasw.airsync.multidesk.SpaceKey.isValid(existing)) {
+                existing
+            } else {
+                com.sameerasw.airsync.multidesk.SpaceKey.generate().also { prefs[spaceKeyKey] = it }
+            }
+        }
+        return key!!
+    }
+
+    fun getLastUsedJson(): Flow<String?> = context.dataStore.data.map { it[lastUsedKey] }
+
+    suspend fun setLastUsedJson(json: String) {
+        context.dataStore.edit { it[lastUsedKey] = json }
+    }
+
+    fun getFlickAimJson(): Flow<String?> = context.dataStore.data.map { it[flickAimKey] }
+
+    suspend fun updateFlickAimJson(transform: (String?) -> String) {
+        context.dataStore.edit { it[flickAimKey] = transform(it[flickAimKey]) }
+    }
 }

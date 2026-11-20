@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -35,11 +34,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  *  - routes outgoing messages (see [DesktopRouting]): phone state to everyone, replies to whoever asked;
  *  - dispatches inbound messages from any computer, remembering who is asking;
  *  - receives desktop→phone files ([PhoneFileReceiver]) and relays desktop→desktop files ([RelayTable]);
- *  - answers `desktopsRequest` and pushes `desktopsList` when the set of connected computers changes.
+ *  - answers `desktopsRequest` and pushes `desktopsList` when the set of connected computers changes;
+ *  - H.I.B Space (docs/SPACE.md): tracks which computer is in use (`desktopActivity`), picks the target
+ *    for Flick / Play with the one target rule ([TargetRule]) and shares the space key.
  */
 object DesktopHub {
     private const val TAG = "DesktopHub"
-    const val PHONE_ID = "phone"
+    const val PHONE_ID = DesktopHubIds.PHONE_ID
 
     data class DesktopStatus(
         val name: String,
@@ -49,7 +50,13 @@ object DesktopHub {
         /** connected | connecting | offline | authFailed | off */
         val state: String,
         val ip: String?,
-        val error: String?
+        val error: String?,
+        /** The user is at this computer right now (fresh `desktopActivity` with inUse, and connected). */
+        val inUse: Boolean = false,
+        /** Seconds since the last keyboard/mouse input there; -1 when unknown. */
+        val idleSeconds: Int = -1,
+        /** This computer is playing the phone's audio (Play on…). */
+        val playing: Boolean = false
     ) {
         val isConnected: Boolean get() = state == "connected"
     }
@@ -78,6 +85,15 @@ object DesktopHub {
 
     private val _desktops = MutableStateFlow<List<DesktopStatus>>(emptyList())
     val desktops: StateFlow<List<DesktopStatus>> = _desktops.asStateFlow()
+
+    // H.I.B Space
+    private val activity = ConcurrentHashMap<String, DesktopActivityInfo>()
+    private val lastUsed = ConcurrentHashMap<String, Long>()
+    @Volatile private var spaceKey: String? = null
+    @Volatile private var spaceSignature: String? = null
+    private val _inUseId = MutableStateFlow<String?>(null)
+    /** The computer the phone considers in use right now (SPACE.md §3.2 `inUse`), or null. */
+    val inUseId: StateFlow<String?> = _inUseId.asStateFlow()
 
     /** The legacy primary connection, seen as a link. */
     object PrimaryLink : DesktopLink {
@@ -126,7 +142,32 @@ object DesktopHub {
                     pushDesktopsListSoon()
                 }
             }
+            launch { ensureSpaceKey() }
+            launch {
+                runCatching { ds.getLastUsedJson().first() }.getOrNull()?.let { json ->
+                    runCatching {
+                        val o = JSONObject(json)
+                        o.keys().forEach { k -> lastUsed.merge(k, o.optLong(k, 0L)) { a, b -> maxOf(a, b) } }
+                    }
+                }
+            }
+            launch {
+                // inUse goes stale when a computer stops reporting; re-check now and then.
+                while (true) {
+                    delay(15_000)
+                    refresh()
+                }
+            }
         }
+    }
+
+    private suspend fun ensureSpaceKey(): String? {
+        spaceKey?.let { return it }
+        val ctx = appContext ?: return null
+        return runCatching { DataStoreManager.getInstance(ctx).getOrCreateSpaceKey() }
+            .onFailure { Log.w(TAG, "Space key unavailable: ${it.javaClass.simpleName}") }
+            .getOrNull()
+            ?.also { spaceKey = it }
     }
 
     private suspend fun migrateIfNeeded(ds: DataStoreManager) {
@@ -329,7 +370,8 @@ object DesktopHub {
         try {
             val isPrimary = link === PrimaryLink
             when {
-                type == "desktopsRequest" -> link.send(desktopsListJson(link))
+                type == "desktopsRequest" -> sendDesktopsList(link)
+                type == "desktopActivity" -> onDesktopActivity(link, json)
                 !isPrimary && (type == "macInfo" || type == "status" || type == "macVolume") -> {
                     // A secondary computer's own media/volume state isn't shown on the phone (the main
                     // screen is about the primary); its macInfo was already consumed by the session.
@@ -507,7 +549,10 @@ object DesktopHub {
 
     fun onSessionChanged(session: DesktopSession) {
         val ctx = appContext
-        if (ctx != null && !session.isReady()) cleanupFor(ctx, session.id)
+        if (ctx != null && !session.isReady()) {
+            cleanupFor(ctx, session.id)
+            activity.remove(PairedDesktops.normalizeName(session.name))
+        }
         refresh()
         pushDesktopsListSoon()
     }
@@ -578,30 +623,147 @@ object DesktopHub {
                     false, st, s?.connectedIp, s?.lastError
                 )
             }
-        _desktops.value = out
+        _desktops.value = withSpaceState(out)
+        recomputeSpace()
     }
 
-    fun desktopsListJson(recipient: DesktopLink?): String {
-        val arr = JSONArray()
-        desktops.value.filter { recipient == null || !PairedDesktops.sameName(it.name, recipient.id) }.forEach { d ->
-            arr.put(JSONObject().apply {
-                put("id", d.name)
-                put("name", d.name)
-                put("platform", d.platform)
-                d.type?.let { put("type", it) }
-                put("connected", d.isConnected)
-            })
+    /** Adds in-use / idle / playing to each status (only a connected computer can be in use or playing). */
+    private fun withSpaceState(list: List<DesktopStatus>): List<DesktopStatus> {
+        val now = System.currentTimeMillis()
+        val playing = com.sameerasw.airsync.utils.PhoneAudioRemote.playingOn.value
+        return list.map { d ->
+            val a = activity[PairedDesktops.normalizeName(d.name)]
+            d.copy(
+                inUse = d.isConnected && a?.isFreshInUse(now) == true,
+                idleSeconds = if (d.isConnected) a?.idleSecondsAt(now) ?: -1 else -1,
+                playing = d.isConnected && playing != null && PairedDesktops.sameName(playing, d.name)
+            )
         }
-        return JSONObject().put("type", "desktopsList").put("data", JSONObject().apply {
-            put("phone", JSONObject().put("id", PHONE_ID).put("name", phoneName))
-            put("desktops", arr)
-        }).toString()
     }
 
-    private fun pushDesktopsListSoon() {
+    // MARK: - H.I.B Space: activity, target rule, push rules
+
+    private fun onDesktopActivity(link: DesktopLink, json: String) {
+        val data = runCatching { JSONObject(json).optJSONObject("data") }.getOrNull() ?: return
+        val info = DesktopActivityInfo.from(
+            inUse = data.optBoolean("inUse", false),
+            idleSeconds = data.optInt("idleSeconds", -1),
+            now = System.currentTimeMillis()
+        )
+        activity[PairedDesktops.normalizeName(link.id)] = info
+        refresh()
+    }
+
+    /** Target-rule candidates: the connected computers with what the phone knows about them. */
+    private fun candidates(): List<TargetRule.Candidate> = desktops.value.filter { it.isConnected }.map { d ->
+        val k = PairedDesktops.normalizeName(d.name)
+        TargetRule.Candidate(
+            id = d.name,
+            inUse = d.inUse,
+            lastActiveAt = activity[k]?.lastActiveAt ?: 0L,
+            lastUsedAt = lastUsed[k] ?: 0L,
+            isPrimary = d.isPrimary
+        )
+    }
+
+    /** Where Flick / Play / Send go when nothing else is said (SPACE.md §1.4). Null when nothing is connected. */
+    fun targetPick(explicit: String? = null, aimed: String? = null): TargetRule.Pick? =
+        TargetRule.pick(candidates(), explicit, aimed)
+
+    fun connectedIds(): List<String> = desktops.value.filter { it.isConnected }.map { it.name }
+
+    /** The phone just sent this computer something on purpose (Flick, Play): it becomes "last used". */
+    fun noteUsed(id: String) {
+        val k = PairedDesktops.normalizeName(id)
+        lastUsed[k] = System.currentTimeMillis()
+        val ctx = appContext ?: return
+        scope.launch {
+            runCatching {
+                val o = JSONObject()
+                lastUsed.forEach { (key, t) -> o.put(key, t) }
+                DataStoreManager.getInstance(ctx).setLastUsedJson(o.toString())
+            }
+        }
+    }
+
+    /** Called when `playingOn` changes (PhoneAudioRemote). */
+    fun onPlayingChanged() = refresh()
+
+    @Synchronized
+    private fun recomputeSpace() {
+        val list = desktops.value
+        val connected = list.filter { it.isConnected }
+        // A computer that dropped can't be playing any more.
+        com.sameerasw.airsync.utils.PhoneAudioRemote.onComputersChanged(connected.map { it.name })
+        val inUse = TargetRule.inUseId(candidates())
+        if (_inUseId.value != inUse) _inUseId.value = inUse
+        val playing = com.sameerasw.airsync.utils.PhoneAudioRemote.playingOn.value
+        val sig = buildString {
+            append(inUse ?: "-").append('|').append(playing ?: "-").append('|')
+            connected.filter { it.inUse }.map { it.name }.sorted().forEach { append(it).append(',') }
+        }
+        val previous = spaceSignature
+        spaceSignature = sig
+        if (previous != null && previous != sig) schedulePush(1_000L)
+    }
+
+    /** The extended `desktopsList` (SPACE.md §3.2) for [recipient]. Contains the space key: never log it. */
+    fun desktopsListJson(recipient: DesktopLink?): String {
+        val ctx = appContext
+        val p = primaryName
+        val discovered = runCatching {
+            com.sameerasw.airsync.utils.discovery.DiscoveryOrchestrator.discoveredDevices.value
+        }.getOrDefault(emptyList())
+        val entries = desktops.value.map { d ->
+            val pd = PairedDesktops.find(paired, d.name)
+            val isPrimary = p != null && PairedDesktops.sameName(p, d.name)
+            // The address the phone's session uses first, then every other IP it knows (QR, discovery).
+            val seen = discovered.filter { PairedDesktops.sameName(it.name, d.name) }.flatMap { it.ips }
+            val ips = if (isPrimary) {
+                PairedDesktops.mergeIps(
+                    listOfNotNull(if (d.isConnected) WebSocketUtil.currentIpAddress else null),
+                    PairedDesktops.mergeIps(pd?.ips ?: emptyList(), PairedDesktops.splitIps(WebSocketUtil.currentIpList) + seen)
+                )
+            } else {
+                PairedDesktops.mergeIps(listOfNotNull(d.ip), (pd?.ips ?: emptyList()) + seen)
+            }
+            val port = (if (isPrimary) WebSocketUtil.currentPortValue else null) ?: pd?.port ?: 6996
+            SpaceJson.DesktopEntry(
+                id = d.name, name = d.name, platform = d.platform, type = d.type,
+                connected = d.isConnected, inUse = d.inUse, idleSeconds = d.idleSeconds,
+                ips = ips, port = port
+            )
+        }
+        val battery = ctx?.let { runCatching { com.sameerasw.airsync.utils.DeviceInfoUtil.getBatteryInfo(it) }.getOrNull() }
+        return SpaceJson.desktopsList(
+            you = recipient?.id,
+            phone = SpaceJson.PhoneInfo(
+                name = phoneName,
+                model = android.os.Build.MODEL,
+                battery = battery?.level,
+                charging = battery?.isCharging
+            ),
+            spaceKey = spaceKey,
+            inUse = _inUseId.value,
+            playingOn = com.sameerasw.airsync.utils.PhoneAudioRemote.playingOn.value,
+            desktops = entries
+        )
+    }
+
+    private fun sendDesktopsList(link: DesktopLink) {
+        scope.launch {
+            ensureSpaceKey()
+            link.send(desktopsListJson(link))
+        }
+    }
+
+    private fun pushDesktopsListSoon() = schedulePush(800L)
+
+    private fun schedulePush(delayMs: Long) {
         pushJob?.cancel()
         pushJob = scope.launch {
-            delay(800)
+            delay(delayMs)
+            ensureSpaceKey()
             connectedLinks().forEach { it.send(desktopsListJson(it)) }
         }
     }
