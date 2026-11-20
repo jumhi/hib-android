@@ -41,6 +41,7 @@ object PhoneFileReceiver {
         val mime: String,
         val chunkSize: Int,
         val checksum: String?,
+        val isClipboard: Boolean,
         val file: File,
         val raf: RandomAccessFile,
         val notifId: Int,
@@ -79,6 +80,7 @@ object PhoneFileReceiver {
                 mime = data.optString("mime").ifBlank { guessMime(name) },
                 chunkSize = chunkSize,
                 checksum = data.optString("checksum").ifBlank { null }?.lowercase(),
+                isClipboard = data.optBoolean("isClipboard", false),
                 file = file,
                 raf = raf,
                 notifId = ("rx$id").hashCode()
@@ -132,6 +134,14 @@ object PhoneFileReceiver {
                     if (expected != null && expected != sha) {
                         Log.w(TAG, "Checksum mismatch for ${state.name}")
                     } else {
+                        // "Send clipboard" from the Mac: an image goes straight onto the phone's clipboard too.
+                        if (state.isClipboard && state.mime.startsWith("image/") && state.size < 20L * 1024 * 1024) {
+                            runCatching {
+                                com.sameerasw.airsync.utils.ClipboardUtil.setClipboardImage(
+                                    context, state.file.readBytes(), state.mime, state.name
+                                )
+                            }
+                        }
                         uri = publish(context, state)
                         ok = uri != null
                     }
