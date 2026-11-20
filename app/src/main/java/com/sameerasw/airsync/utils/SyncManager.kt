@@ -51,7 +51,7 @@ object SyncManager {
                     }
 
                     // Check if sync is needed (either via WebSocket or BLE)
-                    if (WebSocketUtil.isConnected() || com.sameerasw.airsync.data.ble.BleGattServer.isAnyAuthenticated()) {
+                    if (WebSocketUtil.isAnyDesktopConnected() || com.sameerasw.airsync.data.ble.BleGattServer.isAnyAuthenticated()) {
                         val dataStoreManager = DataStoreManager(context)
                         val isSyncEnabled = dataStoreManager.getNotificationSyncEnabled().first()
 
@@ -80,7 +80,7 @@ object SyncManager {
     }
 
     fun checkAndSyncDeviceStatus(context: Context, forceSync: Boolean = false) {
-        if (!WebSocketUtil.isConnected()) {
+        if (!WebSocketUtil.isAnyDesktopConnected()) {
             return
         }
         CoroutineScope(Dispatchers.IO).launch {
@@ -506,11 +506,12 @@ object SyncManager {
     fun sendOptimizedAppIcons(
         context: Context,
         packageNames: List<String>,
-        fetchIcons: Boolean = true
+        fetchIcons: Boolean = true,
+        target: com.sameerasw.airsync.multidesk.DesktopLink? = null
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (!WebSocketUtil.isConnected()) {
+                if (if (target != null) !target.isReady() else !WebSocketUtil.isConnected()) {
                     Log.w(TAG, "Not connected; cannot send optimized app icons")
                     return@launch
                 }
@@ -575,7 +576,7 @@ object SyncManager {
                 }
 
                 val appIconsJson = JsonUtil.createAppIconsJson(apps, iconMap)
-                if (WebSocketUtil.sendMessage(appIconsJson)) {
+                if (target?.send(appIconsJson) ?: WebSocketUtil.sendMessage(appIconsJson)) {
                     Log.d(
                         TAG,
                         "✅ Optimized app icons sent: ${apps.size} apps (icons included: $fetchIcons)"

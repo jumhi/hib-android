@@ -21,7 +21,7 @@ class CallReceiver : BroadcastReceiver() {
 
     @Suppress("DEPRECATION")
     override fun onReceive(context: Context, intent: Intent) {
-        if (!WebSocketUtil.isConnected()) {
+        if (!WebSocketUtil.isAnyDesktopConnected()) {
             return
         }
         Log.d(TAG, "Broadcast received: ${intent.action}")

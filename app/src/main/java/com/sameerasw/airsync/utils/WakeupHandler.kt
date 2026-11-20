@@ -32,6 +32,11 @@ object WakeupHandler {
 
             val dataStoreManager = DataStoreManager.getInstance(context)
 
+            // H.I.B multi-desktop: a wake-up from another paired computer reconnects just that one.
+            if (com.sameerasw.airsync.multidesk.DesktopHub.handleWakeup(context, macName, macIp, macPort)) {
+                return
+            }
+
             if (WebSocketUtil.isWifiConnected()) {
                 Log.d(TAG, "Already connected via Wi-Fi, ignoring wake-up request")
                 return

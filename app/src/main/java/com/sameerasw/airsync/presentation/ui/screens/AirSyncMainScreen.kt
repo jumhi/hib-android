@@ -856,6 +856,15 @@ fun AirSyncMainScreen(
                                         }
                                     )
 
+                                    // H.I.B multi-desktop: every paired computer (Mac + Windows) at once
+                                    AnimatedVisibility(
+                                        visible = uiState.lastConnectedDevice != null && !uiState.isAppPaused,
+                                        enter = expandVertically() + fadeIn(),
+                                        exit = shrinkVertically() + fadeOut()
+                                    ) {
+                                        com.sameerasw.airsync.multidesk.ComputersCard()
+                                    }
+
                                     // Remote Functions Card (Lock Screen, etc.)
                                     AnimatedVisibility(
                                         visible = uiState.isConnected,

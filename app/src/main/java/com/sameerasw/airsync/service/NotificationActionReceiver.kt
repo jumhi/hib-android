@@ -47,7 +47,12 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
             ACTION_CANCEL_TRANSFER -> {
                 val transferId = intent.getStringExtra("transfer_id")
-                if (!transferId.isNullOrEmpty()) {
+                if (!transferId.isNullOrEmpty() && transferId.startsWith("hibrx:")) {
+                    // H.I.B: a file a computer is sending to the phone
+                    com.sameerasw.airsync.multidesk.PhoneFileReceiver.cancelFromPhone(
+                        context, transferId.removePrefix("hibrx:")
+                    )
+                } else if (!transferId.isNullOrEmpty()) {
                     Log.d(TAG, "Cancelling transfer $transferId from notification")
                     // Also try cancelling Quick Share transfer
                     val qsIntent = Intent(

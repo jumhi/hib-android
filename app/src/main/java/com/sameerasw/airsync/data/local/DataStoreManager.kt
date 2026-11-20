@@ -1094,4 +1094,24 @@ class DataStoreManager(private val context: Context) {
 
     fun getUseRippleEnabled(): Flow<Boolean> =
         context.dataStore.data.map { it[USE_RIPPLE] ?: true }
+
+    // H.I.B multi-desktop: every computer the phone is paired with (JSON array, see multidesk/PairedDesktop.kt)
+    private val pairedDesktopsKey = stringPreferencesKey("hib_paired_desktops_v1")
+    private val flickTargetKey = stringPreferencesKey("hib_flick_target_desktop")
+
+    fun getPairedDesktopsJson(): Flow<String?> =
+        context.dataStore.data.map { it[pairedDesktopsKey] }
+
+    suspend fun updatePairedDesktopsJson(transform: (String?) -> String) {
+        context.dataStore.edit { it[pairedDesktopsKey] = transform(it[pairedDesktopsKey]) }
+    }
+
+    fun getFlickTargetDesktop(): Flow<String?> =
+        context.dataStore.data.map { it[flickTargetKey] }
+
+    suspend fun setFlickTargetDesktop(name: String?) {
+        context.dataStore.edit {
+            if (name.isNullOrBlank()) it.remove(flickTargetKey) else it[flickTargetKey] = name
+        }
+    }
 }

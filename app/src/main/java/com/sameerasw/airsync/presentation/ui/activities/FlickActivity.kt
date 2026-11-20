@@ -69,6 +69,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -230,6 +231,22 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
             connected = FlickSender.canSend()
             delay(1000)
         }
+    }
+    // H.I.B multi-desktop: with more than one computer connected, chips pick where the flick lands
+    // (remembered: defaults to the last one used).
+    val allDesktops by com.sameerasw.airsync.multidesk.DesktopHub.desktops.collectAsState()
+    val onlineDesktops = allDesktops.filter { it.isConnected }
+    var flickTarget by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        flickTarget = withContext(Dispatchers.IO) {
+            runCatching { DataStoreManager.getInstance(context).getFlickTargetDesktop().first() }.getOrNull()
+        }
+    }
+    val effectiveTarget = onlineDesktops.firstOrNull { it.name == flickTarget }?.name
+        ?: onlineDesktops.firstOrNull()?.name
+    LaunchedEffect(effectiveTarget) {
+        FlickSender.target = effectiveTarget
+        if (effectiveTarget != null) macName = effectiveTarget
     }
     LaunchedEffect(Unit) {
         initial.forEach { item ->
@@ -407,6 +424,35 @@ private fun FlickOverlay(initial: List<FlickItem>, onFinish: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
+            if (onlineDesktops.size > 1) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    onlineDesktops.forEach { d ->
+                        val selected = d.name == effectiveTarget
+                        Surface(
+                            onClick = {
+                                haptics.tick()
+                                flickTarget = d.name
+                                FlickSender.target = d.name
+                                macName = d.name
+                                scope.launch(Dispatchers.IO) {
+                                    runCatching { DataStoreManager.getInstance(context).setFlickTargetDesktop(d.name) }
+                                }
+                            },
+                            shape = RoundedCornerShape(50),
+                            color = if (selected) FlickCyan.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.14f),
+                            contentColor = if (selected) Color.Black else Color.White
+                        ) {
+                            Text(
+                                text = d.name,
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
+            }
             if (items.size > 1) {
                 Text(
                     text = "${items.size} items — one flick each",

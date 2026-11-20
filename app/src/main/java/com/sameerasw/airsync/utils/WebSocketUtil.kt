@@ -35,6 +35,12 @@ object WebSocketUtil {
     private var client: OkHttpClient? = null
     var currentIpAddress: String? = null
     private var currentPort: Int? = null
+    // H.I.B multi-desktop: what the primary was dialled with (recorded in the paired-computers list)
+    @Volatile var currentIpList: String? = null
+        private set
+    val currentPortValue: Int? get() = currentPort
+    @Volatile var currentKeyString: String? = null
+        private set
     private var currentSymmetricKey: javax.crypto.SecretKey? = null
     private val isConnected = AtomicBoolean(false)
     private val isConnecting = AtomicBoolean(false)
@@ -187,7 +193,9 @@ object WebSocketUtil {
                 }
             }
             currentIpAddress = ipAddress
+            currentIpList = ipAddress
             currentPort = port
+            currentKeyString = symmetricKey
             currentSymmetricKey = symmetricKey?.let { CryptoUtil.decodeKey(it) }
             onConnectionStatusChanged = onConnectionStatus
             onMessageReceived = onMessage
@@ -390,8 +398,11 @@ object WebSocketUtil {
                                     }
                                 }
 
-                                WebSocketMessageHandler.handleIncomingMessage(
+                                // H.I.B multi-desktop: the hub tracks who asked, handles files/relays, then
+                                // hands everything else to WebSocketMessageHandler as before.
+                                com.sameerasw.airsync.multidesk.DesktopHub.dispatchInbound(
                                     context,
+                                    com.sameerasw.airsync.multidesk.DesktopHub.PrimaryLink,
                                     decryptedMessage
                                 )
                                 updateLastSyncTime(context)
@@ -598,6 +609,29 @@ object WebSocketUtil {
      * @return True if the message was enqueued, false if not connected.
      */
     fun sendMessage(message: String): Boolean {
+        // H.I.B multi-desktop: phone state goes to every connected computer, replies go back to the
+        // computer that asked, everything else to the primary (see multidesk/DesktopRouting.kt).
+        return com.sameerasw.airsync.multidesk.DesktopHub.route(message)
+    }
+
+    /** Primary WebSocket only (no BLE fallback, no other computers). */
+    fun sendPrimary(message: String): Boolean {
+        val ws = webSocket
+        if (!isSocketOpen.get() || ws == null) return false
+        val messageToSend = currentSymmetricKey?.let { key ->
+            CryptoUtil.encryptMessage(message, key)
+        } ?: message
+        return ws.send(messageToSend)
+    }
+
+    fun isPrimarySocketOpen(): Boolean = isSocketOpen.get() && webSocket != null
+
+    /** True when any computer (primary, another paired computer, or BLE) can receive phone state. */
+    fun isAnyDesktopConnected(): Boolean =
+        isConnected() || com.sameerasw.airsync.multidesk.DesktopHub.anySecondaryConnected()
+
+    /** The original single-desktop send: primary WebSocket, falling back to BLE. */
+    fun sendPrimaryOrBle(message: String): Boolean {
         // Allow sending as soon as the socket is open (even before handshake completes)
         if (isSocketOpen.get() && webSocket != null) {
             // Read the type from the head of the message instead of parsing the whole
@@ -733,7 +767,7 @@ object WebSocketUtil {
         Log.d(TAG, "Disconnecting WebSocket (manual=$manual)")
 
         if (manual) {
-            sendMessage("{\"type\":\"userDisconnected\",\"data\":{}}")
+            sendPrimary("{\"type\":\"userDisconnected\",\"data\":{}}")
         }
 
         updateConnectedStatus(false)

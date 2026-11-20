@@ -57,7 +57,7 @@ object ScreenshotClipboardMonitor {
     }
 
     private fun syncNewestScreenshot(context: Context) {
-        if (!running.get() || !WebSocketUtil.isConnected()) return
+        if (!running.get() || !WebSocketUtil.isAnyDesktopConnected()) return
         // Respect the clipboard-sync switch immediately, not only when the service restarts.
         val syncEnabled = runCatching {
             kotlinx.coroutines.runBlocking {

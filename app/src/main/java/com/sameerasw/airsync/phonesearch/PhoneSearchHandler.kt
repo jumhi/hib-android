@@ -89,6 +89,8 @@ object PhoneSearchHandler {
         val id = data.optString("id")
         val path = data.optString("path")
         if (id.isEmpty() || path.isEmpty()) return
+        // H.I.B multi-desktop: send the file back to the computer that asked for it.
+        val requester = com.sameerasw.airsync.multidesk.DesktopHub.currentSourceId()
         scope.launch {
             val uri: Uri
             val name: String
@@ -99,7 +101,7 @@ object PhoneSearchHandler {
                 val file = File(path)
                 if (!file.isFile || !file.canRead()) {
                     Log.w(TAG, "Can't read $path")
-                    sendCancel(id)
+                    sendCancel(id, requester)
                     return@launch
                 }
                 uri = Uri.fromFile(file)
@@ -108,8 +110,8 @@ object PhoneSearchHandler {
             val mime = appContext.contentResolver.getType(uri)
                 ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
                 ?: "application/octet-stream"
-            val ok = FlickSender.startFileTransfer(appContext, id, uri, name, mime, tagKey = "searchFetchId")
-            if (!ok) sendCancel(id)
+            val ok = FlickSender.startFileTransfer(appContext, id, uri, name, mime, tagKey = "searchFetchId", to = requester)
+            if (!ok) sendCancel(id, requester)
         }
     }
 
@@ -364,11 +366,12 @@ object PhoneSearchHandler {
         WebSocketUtil.sendMessage(msg.toString())
     }
 
-    private fun sendCancel(id: String) {
+    private fun sendCancel(id: String, to: String? = null) {
         val msg = JSONObject().apply {
             put("type", "fileTransferCancel")
             put("data", JSONObject().put("id", id))
         }
-        WebSocketUtil.sendMessage(msg.toString())
+        if (to != null) com.sameerasw.airsync.multidesk.DesktopHub.sendTo(to, msg.toString())
+        else WebSocketUtil.sendMessage(msg.toString())
     }
 }

@@ -26,6 +26,9 @@ class AirSyncApp : Application() {
 
         bleConnectionManager = com.sameerasw.airsync.data.ble.BleConnectionManager(this)
         bleConnectionManager.start()
+
+        // H.I.B multi-desktop: keep sessions to every other paired computer alongside the primary one.
+        com.sameerasw.airsync.multidesk.DesktopHub.start(this)
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
             override fun onActivityStarted(activity: Activity) {

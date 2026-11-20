@@ -381,6 +381,19 @@ class MainActivity : ComponentActivity() {
 
         val isFromQrScan = data != null
 
+        // H.I.B multi-desktop: scanning another computer's QR while already connected adds it
+        // alongside the current one instead of replacing it.
+        if (isFromQrScan && data?.scheme == "airsync" && WebSocketUtil.isConnected()) {
+            val qr = com.sameerasw.airsync.multidesk.PairingQr.parse(data.toString())
+            val primary = com.sameerasw.airsync.multidesk.DesktopHub.primaryName
+            if (qr?.name != null && qr.key != null &&
+                (primary == null || !com.sameerasw.airsync.multidesk.PairedDesktops.sameName(primary, qr.name))
+            ) {
+                com.sameerasw.airsync.multidesk.DesktopHub.addFromQr(this, qr)
+                Toast.makeText(this, "Adding ${qr.name} to your computers", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         setContent {
             val viewModel: com.sameerasw.airsync.presentation.viewmodel.AirSyncViewModel =
                 androidx.lifecycle.viewmodel.compose.viewModel {

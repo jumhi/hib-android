@@ -502,7 +502,7 @@ class MediaNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
-        if (!WebSocketUtil.isConnected()) {
+        if (!WebSocketUtil.isAnyDesktopConnected()) {
             return
         }
         sbn?.let { notification ->
@@ -538,7 +538,7 @@ class MediaNotificationListener : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         super.onNotificationRemoved(sbn)
-        if (!WebSocketUtil.isConnected()) {
+        if (!WebSocketUtil.isAnyDesktopConnected()) {
             return
         }
         if (sbn != null) handleNotificationRemoval(sbn)
@@ -547,7 +547,7 @@ class MediaNotificationListener : NotificationListenerService() {
     // API level variants call the same handler to ensure we catch swipe-away removals
     override fun onNotificationRemoved(sbn: StatusBarNotification, rankingMap: RankingMap) {
         super.onNotificationRemoved(sbn, rankingMap)
-        if (!WebSocketUtil.isConnected()) {
+        if (!WebSocketUtil.isAnyDesktopConnected()) {
             return
         }
         handleNotificationRemoval(sbn)
@@ -559,7 +559,7 @@ class MediaNotificationListener : NotificationListenerService() {
         reason: Int
     ) {
         super.onNotificationRemoved(sbn, rankingMap, reason)
-        if (!WebSocketUtil.isConnected()) {
+        if (!WebSocketUtil.isAnyDesktopConnected()) {
             return
         }
         handleNotificationRemoval(sbn)

@@ -49,7 +49,28 @@ object FlickSender {
     /** Emits a flick id when the Mac reports that card has landed (`flickLanded`). */
     val landed: SharedFlow<String> = _landed
 
-    fun canSend(): Boolean = WebSocketUtil.isWifiConnected()
+    /**
+     * H.I.B multi-desktop: which computer Flick sends to (desktop name). Null = the primary computer,
+     * or whichever computer is connected when the primary isn't.
+     */
+    @Volatile var target: String? = null
+
+    fun canSend(): Boolean = WebSocketUtil.isWifiConnected() ||
+        com.sameerasw.airsync.multidesk.DesktopHub.anySecondaryConnected()
+
+    private fun targetReady(to: String?): Boolean {
+        val link = com.sameerasw.airsync.multidesk.DesktopHub.findLink(to)
+        return link?.isReady() ?: canSend()
+    }
+
+    private fun send(to: String?, json: String): Boolean {
+        if (to == null) {
+            // No explicit target: primary first, then any other connected computer.
+            val link = com.sameerasw.airsync.multidesk.DesktopHub.connectedLinks().firstOrNull()
+            return link?.send(json) ?: WebSocketUtil.sendPrimaryOrBle(json)
+        }
+        return com.sameerasw.airsync.multidesk.DesktopHub.sendTo(to, json)
+    }
 
     // MARK: incoming (called from WebSocketMessageHandler on the socket thread)
 
@@ -99,14 +120,14 @@ object FlickSender {
             put("type", "flickStart")
             put("data", data)
         }
-        return WebSocketUtil.sendMessage(msg.toString())
+        return send(target, msg.toString())
     }
 
     /**
      * Opens [uri] right away (so the share grant can't lapse once the overlay closes), then streams it
      * to the Mac in the background. Suspends only until the stream is open; returns false if it can't be read.
      */
-    suspend fun startFileTransfer(context: Context, flickId: String, uri: Uri, name: String, mime: String, tagKey: String = "flickId"): Boolean =
+    suspend fun startFileTransfer(context: Context, flickId: String, uri: Uri, name: String, mime: String, tagKey: String = "flickId", to: String? = target): Boolean =
         withContext(Dispatchers.IO) {
             val appContext = context.applicationContext
             val resolver = appContext.contentResolver
@@ -130,7 +151,7 @@ object FlickSender {
 
             scope.launch {
                 val ok = try {
-                    input.use { streamFile(flickId, it, name, mime, size, tagKey) }
+                    input.use { streamFile(flickId, it, name, mime, size, tagKey, to) }
                 } catch (e: Exception) {
                     Log.e(TAG, "Flick transfer failed: ${e.message}")
                     false
@@ -138,15 +159,15 @@ object FlickSender {
                     tempFile?.delete()
                 }
                 if (!ok) {
-                    sendCancel(flickId)
+                    sendCancel(flickId, to)
                     toast(appContext, "Flick to Mac: couldn't send $name")
                 }
             }
             true
         }
 
-    private suspend fun streamFile(id: String, input: InputStream, name: String, mime: String, size: Long, tagKey: String = "flickId"): Boolean {
-        if (!WebSocketUtil.isWifiConnected()) return false
+    private suspend fun streamFile(id: String, input: InputStream, name: String, mime: String, size: Long, tagKey: String = "flickId", to: String? = null): Boolean {
+        if (!targetReady(to)) return false
         val acks = Channel<Int>(Channel.UNLIMITED)
         ackChannels[id] = acks
         try {
@@ -162,7 +183,7 @@ object FlickSender {
                     put(tagKey, id) // "flickId" for Flick to Mac; "searchFetchId" for H.I.B phone search fetches
                 })
             }
-            if (!WebSocketUtil.sendMessage(init.toString())) return false
+            if (!send(to, init.toString())) return false
 
             val totalChunks = ((size + CHUNK_SIZE - 1) / CHUNK_SIZE).toInt()
             // index -> (encoded message, attempts, sentAt)
@@ -185,7 +206,7 @@ object FlickSender {
                             put("chunk", b64)
                         })
                     }.toString()
-                    if (!WebSocketUtil.isWifiConnected() || !WebSocketUtil.sendMessage(chunk)) return false
+                    if (!targetReady(to) || !send(to, chunk)) return false
                     inFlight[nextIndex] = Triple(chunk, 1, System.currentTimeMillis())
                     nextIndex++
                 }
@@ -196,12 +217,12 @@ object FlickSender {
                     if (inFlight.remove(index) != null) acked++
                     continue
                 }
-                if (!WebSocketUtil.isWifiConnected()) return false
+                if (!targetReady(to)) return false
                 val now = System.currentTimeMillis()
                 for ((idx, entry) in inFlight.entries.toList()) {
                     if (now - entry.third < ACK_TIMEOUT_MS) continue
                     if (entry.second >= MAX_ATTEMPTS) return false
-                    WebSocketUtil.sendMessage(entry.first)
+                    send(to, entry.first)
                     inFlight[idx] = Triple(entry.first, entry.second + 1, now)
                 }
             }
@@ -214,7 +235,7 @@ object FlickSender {
                     put("size", size)
                 })
             }
-            return WebSocketUtil.sendMessage(complete.toString())
+            return send(to, complete.toString())
         } finally {
             ackChannels.remove(id)
             acks.close()
@@ -231,13 +252,13 @@ object FlickSender {
         return total
     }
 
-    private fun sendCancel(id: String) {
+    private fun sendCancel(id: String, to: String? = null) {
         try {
             val msg = JSONObject().apply {
                 put("type", "fileTransferCancel")
                 put("data", JSONObject().put("id", id))
             }
-            WebSocketUtil.sendMessage(msg.toString())
+            send(to, msg.toString())
         } catch (_: Exception) {
         }
     }
