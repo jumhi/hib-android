@@ -236,7 +236,7 @@ fun FloatingMediaPlayer(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = musicInfo?.artist?.takeIf { it.isNotEmpty() } ?: "from your Mac",
+                            text = musicInfo?.artist?.takeIf { it.isNotEmpty() } ?: "from your computer",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -313,7 +313,7 @@ fun FloatingMediaPlayer(
                             )
                             Text(
                                 text = musicInfo?.artist?.takeIf { it.isNotEmpty() }
-                                    ?: "from your Mac",
+                                    ?: "from your computer",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,

@@ -242,10 +242,10 @@ class MacMediaPlayerService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Mac Media Player",
+            "Computer media player",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Mac media playback controls"
+            description = "Media playing on your computer"
             setShowBadge(false)
             setSound(null, null)
         }
@@ -312,7 +312,7 @@ class MacMediaPlayerService : Service() {
         val metadataBuilder = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
-            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "Playing on Mac")
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "Playing on your computer")
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
 
         currentAlbumArt?.let { bitmap ->
@@ -392,8 +392,8 @@ class MacMediaPlayerService : Service() {
         val dynamicIcon = com.sameerasw.airsync.utils.DeviceIconResolver.getLastDeviceIconRes(this)
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(dynamicIcon)
-            .setContentTitle(title.ifEmpty { "Mac Media Player" })
-            .setContentText(artist.ifEmpty { "Playing on Mac" })
+            .setContentTitle(title.ifEmpty { "Computer media player" })
+            .setContentText(artist.ifEmpty { "Playing on your computer" })
             .setContentIntent(activityPendingIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)

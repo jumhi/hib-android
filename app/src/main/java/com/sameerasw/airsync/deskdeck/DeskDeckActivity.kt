@@ -313,7 +313,7 @@ private fun NowPlayingCard(modifier: Modifier) {
         }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(
-                if (hasMusic) music!!.title.ifBlank { "Unknown" } else "Nothing playing on Mac",
+                if (hasMusic) music!!.title.ifBlank { "Unknown" } else "Nothing playing on the computer",
                 color = Color.White,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
@@ -388,7 +388,7 @@ private fun StatsRow(stats: DeskDeckRemote.MacStats?, now: Long) {
     val stale = stats == null || now - stats.receivedAt > 6000
     if (stale) {
         Text(
-            "Waiting for your Mac…",
+            "Waiting for your computer…",
             color = Dim,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 4.dp)
@@ -527,7 +527,7 @@ private fun EditTileDialog(current: DeckTile, onDismiss: () -> Unit, onSave: (De
                 when (selected.argKind) {
                     DeckArgKind.MAC_APP -> OutlinedTextField(
                         value = arg, onValueChange = { arg = it },
-                        label = { Text("Mac app name (e.g. Safari)") },
+                        label = { Text("App name on the computer (e.g. Safari)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                     )

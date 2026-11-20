@@ -49,7 +49,7 @@ object DeskDeckRemote {
         val msg = JSONObject().put("type", "deckAction").put("data", data).toString()
         val sent = WebSocketUtil.sendMessage(msg)
         if (!sent) {
-            _lastResult.value = ActionResult(action, false, "Not connected to your Mac", System.currentTimeMillis())
+            _lastResult.value = ActionResult(action, false, "Not connected to your computer", System.currentTimeMillis())
         }
         return sent
     }

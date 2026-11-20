@@ -95,7 +95,7 @@ class AirSyncService : Service() {
         when (action) {
             ACTION_START_SCANNING -> startScanning()
             ACTION_START_SYNC -> {
-                connectedDeviceName = intent.getStringExtra(EXTRA_DEVICE_NAME) ?: "Mac"
+                connectedDeviceName = intent.getStringExtra(EXTRA_DEVICE_NAME) ?: "your computer"
                 startSync()
                 ShortcutUtil.refreshShortcuts(this, true)
             }
@@ -374,7 +374,7 @@ class AirSyncService : Service() {
             )
         } else if (isAuto) {
             builder.setContentTitle("Reconnecting...")
-            builder.setContentText(if (isConnecting) "Trying to connect to Mac..." else "Waiting to retry connection...")
+            builder.setContentText(if (isConnecting) "Trying to connect to your computer..." else "Waiting to retry connection...")
         } else if (isConnecting) {
             builder.setContentTitle("Connecting...")
             builder.setContentText("Connecting to last device...")

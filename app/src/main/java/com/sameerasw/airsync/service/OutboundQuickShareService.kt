@@ -86,7 +86,7 @@ class OutboundQuickShareService : Service() {
             val pairedDevice = dataStoreManager.getLastConnectedDevice().first()
             if (pairedDevice == null) {
                 Log.w(TAG, "No paired Mac, cannot send")
-                updateNotification("No paired Mac found")
+                updateNotification("No paired computer found")
                 stopSelf()
                 return@launch
             }

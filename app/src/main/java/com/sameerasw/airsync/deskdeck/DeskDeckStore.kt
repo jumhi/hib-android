@@ -39,7 +39,7 @@ enum class DeckAction(
     val icon: ImageVector,
     val argKind: DeckArgKind = DeckArgKind.NONE
 ) {
-    LOCK("lock", "Lock Mac", Icons.Rounded.Lock),
+    LOCK("lock", "Lock computer", Icons.Rounded.Lock),
     SCREENSAVER("screensaver", "Screensaver", Icons.Rounded.Wallpaper),
     PLAY_PAUSE("play_pause", "Play / Pause", Icons.Rounded.PlayArrow),
     PREVIOUS("previous", "Previous", Icons.Rounded.SkipPrevious),
@@ -48,7 +48,7 @@ enum class DeckAction(
     VOL_UP("vol_up", "Volume +", Icons.Rounded.VolumeUp),
     MUTE("mute", "Mute", Icons.Rounded.VolumeOff),
     MIC_MUTE("mic_mute", "Mic mute", Icons.Rounded.MicOff),
-    PHONE_AUDIO("phone_audio", "Phone audio on Mac", Icons.Rounded.Speaker),
+    PHONE_AUDIO("phone_audio", "Phone audio on computer", Icons.Rounded.Speaker),
     OPEN_APP("open_app", "Open app", Icons.Rounded.Apps, DeckArgKind.MAC_APP),
     SHORTCUT("shortcut", "Run Shortcut", Icons.Rounded.AutoAwesome, DeckArgKind.SHORTCUT),
     MISSION_CONTROL("mission_control", "Mission Control", Icons.Rounded.ViewQuilt),

@@ -43,13 +43,13 @@ fun HelpAndGuidesContent() {
             HelpSection(
                 title = "Getting Started",
                 iconRes = R.drawable.rounded_qr_code_scanner_24,
-                content = "To connect, keep both devices on the same Wi-Fi network. Scan the QR code shown by H.I.B on your Mac or iPhone.",
+                content = "To connect, keep both devices on the same Wi-Fi network. Scan the QR code shown by H.I.B on your Mac or Windows PC.",
                 links = emptyList()
             ),
             HelpSection(
                 title = "Permissions & Usage",
                 iconRes = R.drawable.rounded_security_24,
-                content = "• Notification Access: Required to sync alerts/media. For sideloaded installs, enable 'Restricted Settings' in App Info.\n• Post Notifications: For the ongoing connection indicator.\n• Background Usage: Keeps the connection alive.\n• Storage: Required for wallpaper sync.\n• Location & Phone State: Required to sync cellular network status to your Mac.",
+                content = "• Notification Access: Required to sync alerts/media. For sideloaded installs, enable 'Restricted Settings' in App Info.\n• Post Notifications: For the ongoing connection indicator.\n• Background Usage: Keeps the connection alive.\n• Storage: Required for wallpaper sync.\n• Location & Phone State: Required to sync cellular network status to your computers.",
                 links = emptyList()
             ),
             HelpSection(
@@ -71,7 +71,7 @@ fun HelpAndGuidesContent() {
             HelpSection(
                 title = "Troubleshooting",
                 iconRes = R.drawable.rounded_troubleshoot_24,
-                content = "• IP N/A on Mac: Ensure LAN connection (not just internet).\n• Random Disconnects: Check battery/data saving policies and network stability.\n• Black Display: If 'Darken screen' is on during mirroring, use ⌥+Shift+O to reveal.",
+                content = "• IP N/A on the computer: Ensure LAN connection (not just internet).\n• Random Disconnects: Check battery/data saving policies and network stability.\n• Black Display: If 'Darken screen' is on during mirroring, use ⌥+Shift+O to reveal.",
                 links = emptyList()
             )
         )

@@ -50,7 +50,7 @@ fun FindMyMacCard(modifier: Modifier = Modifier) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceBright)
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-            Text("Find my Mac", style = MaterialTheme.typography.titleMedium)
+            Text("Find my computer", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
@@ -70,7 +70,7 @@ fun FindMyMacCard(modifier: Modifier = Modifier) {
                 ) {
                     Icon(Icons.Filled.Notifications, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(6.dp))
-                    Text(if (ringing) "Stop ringing" else "Ring Mac", maxLines = 1)
+                    Text(if (ringing) "Stop ringing" else "Ring computer", maxLines = 1)
                 }
                 Button(
                     onClick = {
@@ -86,7 +86,7 @@ fun FindMyMacCard(modifier: Modifier = Modifier) {
                 ) {
                     Icon(Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(6.dp))
-                    Text("Where's my Mac?", maxLines = 1)
+                    Text("Where's my computer?", maxLines = 1)
                 }
             }
 
@@ -96,7 +96,7 @@ fun FindMyMacCard(modifier: Modifier = Modifier) {
 
             macLocation?.let { report ->
                 Spacer(Modifier.height(6.dp))
-                val name = report.macName ?: "Your Mac"
+                val name = report.macName ?: "Your computer"
                 val ago = DateUtils.getRelativeTimeSpanString(report.timestamp).toString()
                 if (report.lat != null && report.lon != null) {
                     val accuracy = report.accuracyM?.let { " (±${it.toInt()} m)" } ?: ""

@@ -276,7 +276,7 @@ private fun ClipboardActionScreenContent(
 
                 // Device Name / Action
                 val label = when (shortcutAction) {
-                    ShortcutUtil.DASH_ACTION_LOCK -> "Lock Mac"
+                    ShortcutUtil.DASH_ACTION_LOCK -> "Lock computer"
                     ShortcutUtil.DASH_ACTION_DISCONNECT -> "Disconnected"
                     ShortcutUtil.DASH_ACTION_RECONNECT -> "Reconnect"
                     ShortcutUtil.DASH_ACTION_REMOTE -> "Opening Remote..."

@@ -14,7 +14,7 @@
     <string name="disconnect">Disconnect</string>
     <string name="device_discovery">Device discovery</string>
     <string name="device_discovery_description">Allow other devices to find this phone in the background</string>
-    <string name="rating_prompt">Psst... You\'ve been syncing with your Mac for a while now, Do you like the app? Rate and give your feedback. ♥</string>
+    <string name="rating_prompt">Psst... You\'ve been syncing with your computers for a while now. Do you like the app? Rate and give your feedback. ♥</string>
     <string name="rate_now">Rate Now</string>
     <string name="maybe_later">Maybe Later</string>
     <string name="no_device_connected">No device connected</string>
@@ -24,7 +24,7 @@
     <string name="sending">Sending Clipboard…</string>
     <string name="clipboard_sent">Clipboard Sent</string>
     <string name="failed_to_send_clipboard">Failed to Send Clipboard</string>
-    <string name="your_mac">Your Mac</string>
+    <string name="your_mac">Your computer</string>
     <string name="quick_share_send_label">Send</string>
     <string name="flick_to_mac_label">Flick</string>
     <string name="play_on_computer_tile">Play on computer</string>
@@ -64,12 +64,12 @@
 
     <!-- Onboarding / Welcome Screen -->
     <string name="welcome_title">Welcome to H.I.B</string>
-    <string name="welcome_subtitle">Continuity With Your Mac</string>
+    <string name="welcome_subtitle">Continuity With Your Computers</string>
     <string name="hib_maker_name">Haitham Hamid</string>
     <string name="welcome_developer_attribution">by %1$s</string>
     <string name="action_lets_begin">Let\'s Begin</string>
     <string name="acknowledgement_title">Permissions</string>
-    <string name="acknowledgement_desc">This app allows you to sync notifications, clipboard, and media controls with your Mac. To provide these features, H.I.B requires certain permissions.\n\nYou have full control over which features are enabled and which permissions are granted. We do not collect or store any of your personal data.\n\nH.I.B is a private build. All features are included.</string>
+    <string name="acknowledgement_desc">This app allows you to sync notifications, clipboard, and media controls with your Mac and Windows PC. To provide these features, H.I.B requires certain permissions.\n\nYou have full control over which features are enabled and which permissions are granted. We do not collect or store any of your personal data.\n\nH.I.B is a private build. All features are included.</string>
     <string name="acknowledgement_footer">If you need any help, feel free to check the guides.</string>
     <string name="action_i_understand">I Understand</string>
     <string name="feature_intro_desc">From the scan button in app or by long pressing the connection quick settings tile, scan the QR code displayed on the app on macOS.</string>
@@ -99,19 +99,19 @@
 
     <!-- Local Network Permission strings -->
     <string name="permission_local_network_title">Local Network Access</string>
-    <string name="permission_local_network_desc">Discover nearby Mac devices on Wi-Fi</string>
-    <string name="permission_local_network_explain">H.I.B needs access to your local network to discover and connect to your Mac over Wi-Fi.</string>
-    <string name="permission_local_network_why">Local network discovery allows the app to find and establish a secure, fast connection with your Mac on the same Wi-Fi network for syncing notifications, clipboard, and controlling media controls. Without this, Wi-Fi synchronization cannot function on Android 17+.</string>
+    <string name="permission_local_network_desc">Discover your computers nearby on Wi-Fi</string>
+    <string name="permission_local_network_explain">H.I.B needs access to your local network to discover and connect to your computers over Wi-Fi.</string>
+    <string name="permission_local_network_why">Local network discovery allows the app to find and establish a secure, fast connection with your computers on the same Wi-Fi network for syncing notifications, clipboard, and controlling media controls. Without this, Wi-Fi synchronization cannot function on Android 17+.</string>
     <string name="permission_local_network_button">Grant Local Network Access</string>
 
     <!-- Call Control Permission strings -->
     <string name="permission_answer_calls_title">Answer Calls</string>
-    <string name="permission_answer_calls_desc">Allows accepting and ending calls from your Mac</string>
-    <string name="permission_answer_calls_explain">H.I.B needs permission to manage phone calls so you can accept or decline them directly from your Mac companion window.</string>
-    <string name="permission_answer_calls_why">When you receive an incoming call, this permission enables the companion app to answer or decline/end the call programmatically in response to your actions on the Mac. Without this permission, the app will fall back to emulating headphone media click signals which may only toggle the call state rather than allowing explicit decline actions.</string>
+    <string name="permission_answer_calls_desc">Allows accepting and ending calls from your computer</string>
+    <string name="permission_answer_calls_explain">H.I.B needs permission to manage phone calls so you can accept or decline them directly from your computer.</string>
+    <string name="permission_answer_calls_why">When you receive an incoming call, this permission enables the companion app to answer or decline/end the call programmatically in response to your actions on the computer. Without this permission, the app will fall back to emulating headphone media click signals which may only toggle the call state rather than allowing explicit decline actions.</string>
     <string name="permission_answer_calls_button">Grant Answer Calls Access</string>
     <string name="mirror_attachment_accessibility_title">H.I.B Attachment Automation</string>
-    <string name="mirror_attachment_accessibility_description">Attaches a file only after you drop it on the paired Mac mirror. Limited to WhatsApp and Gmail, expires after 12 seconds, and never presses Send.</string>
+    <string name="mirror_attachment_accessibility_description">Attaches a file only after you drop it on the phone mirror on your computer. Limited to WhatsApp and Gmail, expires after 12 seconds, and never presses Send.</string>
     <string name="action_select_apps">Select apps</string>
     <string name="subtitle_to_be_notified">To be notified</string>
     <string name="action_exclude_media_apps">Exclude media apps</string>

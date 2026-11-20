@@ -184,7 +184,7 @@ fun PermissionsScreen(
                                 "Wallpaper & File Access" -> {
                                     PermissionButton(
                                         permissionName = permission,
-                                        description = "Enables wallpaper sync and Mac File Access",
+                                        description = "Enables wallpaper sync and File Access from your computer",
                                         onExplainClick = {
                                             showDialog = PermissionType.WALLPAPER_ACCESS
                                         },
@@ -235,7 +235,7 @@ fun PermissionsScreen(
                                 "Local Network Access" -> {
                                     PermissionButton(
                                         permissionName = permission,
-                                        description = "Discover nearby Mac devices on Wi-Fi",
+                                        description = "Discover your computers on Wi-Fi",
                                         onExplainClick = {
                                             showDialog = PermissionType.LOCAL_NETWORK
                                         },
@@ -246,7 +246,7 @@ fun PermissionsScreen(
                                 "Answer Calls" -> {
                                     PermissionButton(
                                         permissionName = permission,
-                                        description = "Accept and end calls from Mac",
+                                        description = "Accept and end calls from your computer",
                                         onExplainClick = {
                                             showDialog = PermissionType.ANSWER_CALLS
                                         },
@@ -257,7 +257,7 @@ fun PermissionsScreen(
                                 "Mirror Attachment Automation" -> {
                                     PermissionButton(
                                         permissionName = permission,
-                                        description = "Attach files dropped onto the Mac mirror",
+                                        description = "Attach files dropped onto the phone mirror on your computer",
                                         onExplainClick = {
                                             showDialog = PermissionType.MIRROR_ATTACHMENTS
                                         },

@@ -42,7 +42,7 @@ object FindMyMessage {
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             nm.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "Find My messages", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Messages your Mac shows on this phone if it's lost"
+                    description = "Messages your computer shows on this phone if it's lost"
                     setBypassDnd(true)
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 }

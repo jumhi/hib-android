@@ -51,7 +51,7 @@ object PhoneApprovalManager {
     fun onRequest(context: Context, data: JSONObject) {
         val id = data.optString("id")
         if (id.isEmpty() || id.length > 128) return
-        val title = data.optString("title").ifEmpty { "Approve on your Mac?" }.take(120)
+        val title = data.optString("title").ifEmpty { "Approve on your computer?" }.take(120)
         val detail = data.optString("detail").take(400)
         val expiresInMs = data.optLong("expiresInMs", 30_000L).coerceIn(5_000L, 60_000L)
         val app = context.applicationContext
@@ -129,8 +129,8 @@ object PhoneApprovalManager {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Mac approvals", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Approve sudo and other requests from your Mac with your fingerprint"
+                NotificationChannel(CHANNEL_ID, "Computer approvals", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Approve sudo and other requests from your computer with your fingerprint"
                     lockscreenVisibility = Notification.VISIBILITY_PRIVATE
                     enableVibration(true)
                 }
@@ -156,7 +156,7 @@ object PhoneApprovalManager {
             .setPublicVersion(
                 NotificationCompat.Builder(context, CHANNEL_ID)
                     .setSmallIcon(R.drawable.ic_stat_name)
-                    .setContentTitle("Approval request from your Mac")
+                    .setContentTitle("Approval request from your computer")
                     .build()
             )
             .setOngoing(true)

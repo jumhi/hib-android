@@ -540,7 +540,7 @@ class AirSyncViewModel(
 
     fun prepareForManualConnection() {
         val manualDevice = ConnectedDevice(
-            name = _uiState.value.manualPcName.ifEmpty { "My Mac/PC" },
+            name = _uiState.value.manualPcName.ifEmpty { "My computer" },
             ipAddress = _uiState.value.ipAddress,
             port = _uiState.value.port,
             lastConnected = System.currentTimeMillis(),
@@ -614,7 +614,7 @@ class AirSyncViewModel(
         symmetricKey: String? = null
     ) {
         viewModelScope.launch {
-            val deviceName = pcName ?: "My Mac"
+            val deviceName = pcName ?: "My computer"
             val ourIp = _deviceInfo.value.localIp
             val clientIp = _uiState.value.ipAddress
             val port = _uiState.value.port

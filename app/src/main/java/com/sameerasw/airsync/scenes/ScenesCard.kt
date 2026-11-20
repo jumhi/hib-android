@@ -74,7 +74,7 @@ fun ScenesCard(modifier: Modifier = Modifier) {
                         onClick = {
                             HapticUtil.performClick(haptics)
                             if (!ScenesRemote.run(scene.id)) {
-                                Toast.makeText(context, "Mac isn't connected", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Your computer isn't connected", Toast.LENGTH_SHORT).show()
                             }
                         },
                         enabled = !isRunning,
@@ -149,7 +149,7 @@ fun ScenesPermissionRow(permission: String) {
     }
 
     val description = when (permission) {
-        ScenesPermissions.DND -> "Lets Mac Scenes turn Do Not Disturb on/off and set silent mode"
+        ScenesPermissions.DND -> "Lets Scenes on your computer turn Do Not Disturb on/off and set silent mode"
         else -> if (!ScenesPermissions.hasFineLocation(context))
             "Lets Scenes see which Wi-Fi network you're on (optional)"
         else "Choose “Allow all the time” so Wi-Fi names work in the background"

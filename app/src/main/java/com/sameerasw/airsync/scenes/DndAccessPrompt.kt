@@ -55,7 +55,7 @@ fun DndAccessPrompt(modifier: Modifier = Modifier) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             Text("Do Not Disturb access", style = MaterialTheme.typography.titleSmall)
             Text(
-                "Lets Mac Scenes silence this phone (e.g. during meetings). Turn on H.I.B on the next screen.",
+                "Lets Scenes on your computer silence this phone (e.g. during meetings). Turn on H.I.B on the next screen.",
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.height(8.dp))

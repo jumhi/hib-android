@@ -64,7 +64,7 @@ fun HelpSupportBottomSheet(
             HelpSection(
                 title = "Getting Started",
                 iconRes = R.drawable.rounded_qr_code_scanner_24,
-                content = "To connect, keep both devices on the same Wi-Fi network. Scan the QR code shown by H.I.B on your Mac or iPhone.",
+                content = "To connect, keep both devices on the same Wi-Fi network. Scan the QR code shown by H.I.B on your Mac or Windows PC.",
                 links = emptyList()
             ),
             HelpSection(
@@ -92,7 +92,7 @@ fun HelpSupportBottomSheet(
             HelpSection(
                 title = "Troubleshooting",
                 iconRes = R.drawable.rounded_troubleshoot_24,
-                content = "• IP N/A on Mac: Ensure LAN connection (not just internet).\n• Random Disconnects: Check battery/data saving policies and network stability.\n• Black Display: If 'Darken screen' is on during mirroring, use ⌥+Shift+O to reveal.",
+                content = "• IP N/A on the computer: Ensure LAN connection (not just internet).\n• Random Disconnects: Check battery/data saving policies and network stability.\n• Black Display: If 'Darken screen' is on during mirroring, use ⌥+Shift+O to reveal.",
                 links = emptyList()
             )
         )

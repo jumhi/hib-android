@@ -21,8 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.DesktopWindows
-import androidx.compose.material.icons.rounded.LaptopMac
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -53,9 +51,9 @@ import com.sameerasw.airsync.presentation.ui.activities.QRScannerActivity
 import com.sameerasw.airsync.utils.HapticUtil
 
 /**
- * H.I.B multi-desktop — "Your computers" on the main screen: every paired Mac / Windows PC with its
- * live status, an on/off switch per extra computer, remove, and "Add computer" (scan its QR code).
- * Adding a computer never unpairs the others.
+ * H.I.B Space — "Your devices" on the main screen: every paired Mac / Windows PC with its live state
+ * (In use, Connected, Off, Offline), what it's doing (playing the phone's audio), an on/off switch per
+ * extra computer, remove, and "Add computer" (scan its QR code). Adding a computer never unpairs the others.
  */
 @Composable
 fun ComputersCard(modifier: Modifier = Modifier) {
@@ -87,13 +85,19 @@ fun ComputersCard(modifier: Modifier = Modifier) {
             val online = desktops.count { it.isConnected }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Your computers",
+                    text = "Your devices",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    text = if (desktops.isEmpty()) "" else "$online of ${desktops.size} connected",
+                    text = when {
+                        desktops.isEmpty() -> ""
+                        desktops.any { it.inUse } -> "Using ${desktops.first { it.inUse }.name}"
+                        else -> "$online of ${desktops.size} connected"
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -106,24 +110,43 @@ fun ComputersCard(modifier: Modifier = Modifier) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(contentAlignment = Alignment.BottomEnd) {
-                        Icon(
-                            imageVector = if (d.platform == "windows") Icons.Rounded.DesktopWindows else Icons.Rounded.LaptopMac,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(28.dp)
-                        )
                         Box(
-                            Modifier.size(9.dp).clip(CircleShape).background(statusColor(d.state))
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (d.inUse) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceContainerHighest
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = deviceIcon(d.platform),
+                                contentDescription = null,
+                                tint = if (d.inUse) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Box(
+                            Modifier.size(11.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceBright).padding(2.dp)
+                                .clip(CircleShape).background(statusColor(d))
                         )
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            text = d.name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = d.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            if (d.inUse) {
+                                Spacer(Modifier.width(6.dp))
+                                InUsePill()
+                            }
+                        }
                         Text(
                             text = statusLine(d),
                             style = MaterialTheme.typography.bodySmall,
@@ -164,7 +187,7 @@ fun ComputersCard(modifier: Modifier = Modifier) {
                 Text("Add computer", style = MaterialTheme.typography.labelLarge)
             }
             Text(
-                text = "Stay connected to your Mac and Windows PC at once. Notifications, clipboard, calls and battery go to all of them; files can travel between any two.",
+                text = "Your phone, Mac and Windows PC work as one. Notifications, clipboard, calls and battery go to every computer; Flick, Play and files go to the one you're using unless you pick another.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp, start = 4.dp, end = 4.dp)
@@ -188,22 +211,32 @@ fun ComputersCard(modifier: Modifier = Modifier) {
     }
 }
 
-private fun statusColor(state: String): Color = when (state) {
-    "connected" -> Color(0xFF34C759)
-    "connecting" -> Color(0xFFFFB300)
-    "authFailed" -> Color(0xFFE53935)
+private fun statusColor(d: DesktopHub.DesktopStatus): Color = when {
+    d.inUse -> HibLime
+    d.state == "connected" -> Color(0xFF34C759)
+    d.state == "connecting" -> Color(0xFFFFB300)
+    d.state == "authFailed" -> Color(0xFFE53935)
     else -> Color(0xFF9E9E9E)
 }
 
+/** "In use · Mac · Playing", "Connected · Windows · main", "Off", "Offline" … */
 private fun statusLine(d: DesktopHub.DesktopStatus): String {
     val kind = if (d.platform == "windows") "Windows" else "Mac"
-    val main = if (d.isPrimary) " · main" else ""
     val st = when (d.state) {
-        "connected" -> "Connected" + (d.ip?.let { " · $it" } ?: "")
+        "connected" -> if (d.inUse) "In use" else "Connected"
         "connecting" -> "Connecting…"
         "authFailed" -> "Pairing expired — scan its QR again"
         "off" -> "Off"
-        else -> "Not reachable"
+        else -> "Offline"
     }
-    return "$kind$main · $st"
+    val parts = mutableListOf(st, kind)
+    if (d.isPrimary) parts += "main"
+    if (d.playing) parts += "playing phone audio"
+    if (d.state == "connected" && !d.inUse && d.idleSeconds in 90..(48 * 3600)) parts += "idle ${idle(d.idleSeconds)}"
+    return parts.joinToString(" · ")
+}
+
+private fun idle(seconds: Int): String = when {
+    seconds < 3600 -> "${seconds / 60} min"
+    else -> "${seconds / 3600} h"
 }

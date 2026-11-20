@@ -632,7 +632,7 @@ object WebSocketMessageHandler {
                         launch(Dispatchers.Main) {
                             Toast.makeText(
                                 context,
-                                "Mac app is outdated ($macVersion < $minVersion). Please update the mac app and reconnect.",
+                                "H.I.B on your computer is outdated ($macVersion < $minVersion). Please update it and reconnect.",
                                 Toast.LENGTH_LONG
                             ).show()
                         }

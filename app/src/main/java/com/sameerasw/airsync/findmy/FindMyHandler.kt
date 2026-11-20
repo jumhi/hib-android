@@ -126,18 +126,18 @@ object FindMyHandler {
         if (WebSocketUtil.isWifiConnected()) {
             val message = JSONObject().put("type", type).put("data", data).toString()
             if (WebSocketUtil.sendMessage(message)) {
-                _status.value = "Sent to your Mac (nearby)"
+                _status.value = "Sent to your computer (nearby)"
                 return
             }
         }
         if (!FindMyRelayClient.isAvailable(ctx)) {
-            _status.value = "Not paired yet — connect to your Mac once to set up the internet relay"
+            _status.value = "Not paired yet — connect to your computer once to set up the internet relay"
             return
         }
         _status.value = "Sending over the internet…"
         FindMyRelayClient.publish(ctx, type, data) { ok ->
             main.post {
-                _status.value = if (ok) "Sent over the internet — waiting for your Mac" else "Couldn't reach the relay. Check the internet connection."
+                _status.value = if (ok) "Sent over the internet — waiting for your computer" else "Couldn't reach the relay. Check the internet connection."
             }
         }
     }

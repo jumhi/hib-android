@@ -56,7 +56,12 @@ object PhoneRinger {
         }
     }
 
+    /** The computer that asked to ring (shown in the notification); captured on the socket thread. */
+    @Volatile private var ringFrom: String? = null
+
     fun start(context: Context) {
+        ringFrom = com.sameerasw.airsync.multidesk.DesktopHub.currentSourceId()
+            ?: com.sameerasw.airsync.multidesk.DesktopHub.primaryName
         main.post { startOnMain(context.applicationContext) }
     }
 
@@ -162,7 +167,7 @@ object PhoneRinger {
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             nm.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "Ring My Phone", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Shown while your Mac is ringing this phone"
+                    description = "Shown while a computer is ringing this phone"
                     setSound(null, null)
                     enableVibration(false)
                     setBypassDnd(true)
@@ -179,7 +184,7 @@ object PhoneRinger {
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_name)
-            .setContentTitle("Your Mac is ringing this phone")
+            .setContentTitle("${ringFrom ?: "Your computer"} is ringing this phone")
             .setContentText("Tap Stop to silence it")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)

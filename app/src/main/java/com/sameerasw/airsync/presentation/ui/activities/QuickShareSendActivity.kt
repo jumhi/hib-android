@@ -151,7 +151,7 @@ private fun QuickShareSendScreen(
                 delay(1500)
                 onFinished()
             } else if (pairedDeviceName.isNullOrBlank()) {
-                uiState = SendUiState.Error("No Mac paired")
+                uiState = SendUiState.Error("No computer paired")
                 delay(1500)
                 onFinished()
             } else if (uris.isEmpty()) {

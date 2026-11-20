@@ -98,7 +98,7 @@ object ScenePhoneActions {
             val label = try {
                 context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg, 0)).toString()
             } catch (e: Exception) { pkg }
-            postNotification(context, "Open $label", "Tap to open $label (requested by a Mac scene)", intent)
+            postNotification(context, "Open $label", "Tap to open $label (requested by a scene on your computer)", intent)
             "Android blocked opening $label in the background; posted a tap-to-open notification"
         }
     }
@@ -114,7 +114,7 @@ object ScenePhoneActions {
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             nm.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "Scenes", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Notifications from H.I.B Scenes run on your Mac"
+                    description = "Notifications from H.I.B Scenes run on your computer"
                 }
             )
         }

@@ -64,7 +64,7 @@ fun DeskDeckCard(modifier: Modifier = Modifier) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             if (charging) {
                 Text(
-                    text = "Charging on your desk? Turn this phone into a control deck for your Mac.",
+                    text = "Charging on your desk? Turn this phone into a control deck for your computer.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp)

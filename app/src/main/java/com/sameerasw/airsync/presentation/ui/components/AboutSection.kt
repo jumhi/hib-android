@@ -60,7 +60,7 @@ fun AboutSection(
     onAvatarLongClickWithPosition: ((Offset) -> Unit)? = null,
     appName: String = "H.I.B",
     developerName: String = stringResource(R.string.hib_maker_name),
-    description: String = "H.I.B enables seamless synchronization between your Android device and Mac. Share notifications, clipboard content, and device status wirelessly over your local network."
+    description: String = "H.I.B enables seamless synchronization between your Android device and your computers (Mac and Windows). Share notifications, clipboard content, and device status wirelessly over your local network."
 ) {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
@@ -170,7 +170,7 @@ fun AboutSection(
                 ) {
                     Text("H.I.B — Haitham Is Bored", fontWeight = FontWeight.Bold)
                     Text(
-                        "A private Galaxy + Mac ecosystem for notifications, files, links, text, and screenshots.",
+                        "A private Galaxy + Mac + Windows ecosystem for notifications, files, links, text, and screenshots.",
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

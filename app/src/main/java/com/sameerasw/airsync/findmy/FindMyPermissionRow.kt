@@ -68,8 +68,8 @@ fun FindMyPermissionRow(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
                 Text(
-                    if (!fine) "Let your Mac locate this phone. Step 1: allow precise location."
-                    else "Step 2: choose \"Allow all the time\" so your Mac can find this phone while H.I.B is in the background.",
+                    if (!fine) "Let your computer locate this phone. Step 1: allow precise location."
+                    else "Step 2: choose \"Allow all the time\" so your computer can find this phone while H.I.B is in the background.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                 )

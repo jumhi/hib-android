@@ -39,8 +39,8 @@ fun MediaSyncCard(
         }
         IconToggleItem(
             iconRes = R.drawable.rounded_smart_display_24,
-            title = "Show Mac Media Controls",
-            description = "Show media controls when Mac is playing music",
+            title = "Show Computer Media Controls",
+            description = "Show media controls when your computer is playing music",
             isChecked = isMacMediaControlsEnabled,
             onCheckedChange = onToggleMacMediaControls
         )

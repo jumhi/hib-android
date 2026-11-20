@@ -138,7 +138,7 @@ object ShortcutUtil {
             shortcuts.add(
                 ShortcutInfoCompat.Builder(context, SHORTCUT_ID_LOCK)
                     .setShortLabel("Lock")
-                    .setLongLabel("Lock Mac")
+                    .setLongLabel("Lock computer")
                     .setIcon(IconCompat.createWithResource(context, R.drawable.rounded_lock_24))
                     .setIntent(Intent(context, ClipboardActionActivity::class.java).apply {
                         action = DASH_ACTION_LOCK

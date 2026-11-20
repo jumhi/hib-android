@@ -52,7 +52,7 @@ object CallPermissionHelper {
      */
     fun getPermissionRationale(permission: String): String = when (permission) {
         Manifest.permission.READ_CALL_LOG -> {
-            "Call logs access allows H.I.B to detect incoming, outgoing, and missed calls to sync with your Mac."
+            "Call logs access allows H.I.B to detect incoming, outgoing, and missed calls to sync with your computers."
         }
 
         Manifest.permission.READ_CONTACTS -> {
