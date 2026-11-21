@@ -10,7 +10,7 @@ import kotlin.math.atan2
 import kotlin.math.sqrt
 
 /**
- * H.I.B Flick aim: where the phone is pointing while the Flick screen is open.
+ * H.I.B Flick aim: where the phone is pointing while the Flick screen (or a Point to act screen) is open.
  *
  * The aim direction is the sum of the phone's "top" axis and its "back" axis in world
  * coordinates, so it works whether the phone is held flat-ish (top points at the screen)
@@ -29,14 +29,24 @@ object FlickAim : SensorEventListener {
         (context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager)
             ?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null
 
+    /** How many screens want the aim (Flick, Flick settings, Point to act); the sensor runs while > 0. */
+    private var users = 0
+
+    /** Starts the sensor (or joins it when another screen already did). Balance every call with [stop]. */
+    @Synchronized
     fun start(context: Context) {
+        users++
+        if (manager != null) return
         val sm = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager ?: return
         val sensor = sm.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) ?: return
         manager = sm
         sm.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME)
     }
 
+    @Synchronized
     fun stop() {
+        if (users > 0) users--
+        if (users > 0) return
         manager?.unregisterListener(this)
         manager = null
         heading = null

@@ -746,7 +746,7 @@ object DesktopHub {
     }
 
     /** Target-rule candidates: the connected computers with what the phone knows about them. */
-    private fun candidates(): List<TargetRule.Candidate> = desktops.value.filter { it.isConnected }.map { d ->
+    internal fun candidates(): List<TargetRule.Candidate> = desktops.value.filter { it.isConnected }.map { d ->
         val k = PairedDesktops.normalizeName(d.name)
         TargetRule.Candidate(
             id = d.name,

@@ -98,9 +98,17 @@ object ScreensInfo {
 object PointJson {
     fun screensRequest(): String = envelope("screensRequest", JsonObject())
 
-    fun flickAim(screen: String?): String = envelope("flickAim", JsonObject().apply {
+    /**
+     * `flickAim` (SPACE.md §7.4). [label] (§11.2, phone-provided, short: "Desk Deck", "Remote"…) replaces the
+     * pill's "Flick lands here"; it only goes with a screen.
+     */
+    fun flickAim(screen: String?, label: String? = null): String = envelope("flickAim", JsonObject().apply {
         if (screen != null) addProperty("screen", screen) else add("screen", JsonNull.INSTANCE)
+        if (screen != null && !label.isNullOrBlank()) addProperty("label", label.trim())
     })
+
+    /** `deckOpen` (Desk Deck, SPACE.md §11.1/§11.3): start (true) or stop streaming `deckState`. */
+    fun deckOpen(open: Boolean): String = envelope("deckOpen", JsonObject().apply { addProperty("open", open) })
 
     fun aimSetup(screen: String, step: Int, total: Int, progress: Float): String =
         envelope("aimSetup", JsonObject().apply {
@@ -384,43 +392,48 @@ class PointSetupRun(val targets: List<ScreenTarget>, private val hold: HoldToCap
 }
 
 /**
- * Which computer's screen is lit while the Flick screen is open (SPACE.md §7.4): `flickAim{screen}` to the
- * computer that owns the aimed screen, `null` to the one lit before, the current one again every
- * [resendMs], and `null` to all on close.
+ * Which computer's screen is lit while the Flick screen (or a Point to act screen, §11) is open (SPACE.md §7.4):
+ * `flickAim{screen,label}` to the computer that owns the aimed screen, `null` to the one lit before, the
+ * current one again every [resendMs] (and at once when the label changes), and `null` to all on close.
  */
 class AimLight(private val resendMs: Long = 1500L) {
-    data class Send(val computer: String, val screen: String?) {
-        fun json(): String = PointJson.flickAim(screen)
+    data class Send(val computer: String, val screen: String?, val label: String? = null) {
+        fun json(): String = PointJson.flickAim(screen, label)
     }
 
     private var lit: ScreenTarget? = null
+    private var litLabel: String? = null
     private var sentAt = 0L
 
     val current: ScreenTarget? get() = lit
 
-    fun update(target: ScreenTarget?, now: Long): List<Send> {
+    /** @param label what the lit screen's pill says (null: the computer's default, "Flick lands here") */
+    fun update(target: ScreenTarget?, now: Long, label: String? = null): List<Send> {
         val prev = lit
         if (prev == null && target == null) return emptyList()
         if (prev != null && target != null && target.sameAs(prev.computer, prev.screen)) {
-            if (now - sentAt < resendMs) return emptyList()
+            if (label == litLabel && now - sentAt < resendMs) return emptyList()
             sentAt = now
-            return listOf(Send(target.computer, target.screen))
+            litLabel = label
+            return listOf(Send(target.computer, target.screen, label))
         }
         val out = mutableListOf<Send>()
         if (prev != null && (target == null || !PairedDesktops.sameName(prev.computer, target.computer))) {
             out += Send(prev.computer, null)
         }
         if (target != null) {
-            out += Send(target.computer, target.screen)
+            out += Send(target.computer, target.screen, label)
             sentAt = now
         }
         lit = target
+        litLabel = if (target != null) label else null
         return out
     }
 
     /** Flick closes (or pauses): light nothing anywhere. */
     fun clear(connected: List<String>): List<Send> {
         lit = null
+        litLabel = null
         sentAt = 0L
         return connected.map { Send(it, null) }
     }
