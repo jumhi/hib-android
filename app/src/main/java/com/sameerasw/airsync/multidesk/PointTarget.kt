@@ -50,6 +50,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -113,6 +114,26 @@ object PointTarget {
     /** While a point-aware screen is open: to the target only. Otherwise the usual route (the main computer). */
     fun sendOrRoute(json: String): Boolean = if (isTracking) send(json) else WebSocketUtil.sendMessage(json)
 
+    /** The saved screen map, loading it once if no run has yet. */
+    internal suspend fun savedMap(context: Context): List<SavedScreenAim> =
+        saved ?: FlickScreenStore.flow(context.applicationContext).first().also { saved = it }
+
+    @Volatile private var glowSeq = 0
+
+    /** One short glow on the screen a press picked (cards that don't track live). Skipped while tracking. */
+    internal fun glowOnce(choice: PointChoice?, label: String) {
+        if (isTracking) return
+        val (on, off) = PointPress.glow(choice, label) ?: return
+        val seq = ++glowSeq
+        DesktopHub.sendToComputer(on.computer, on.json())
+        scope.launch {
+            delay(PointPress.GLOW_MS)
+            // A newer press glows instead, or live tracking took over that computer: leave it lit.
+            val litByTracking = synchronized(lock) { session.lit?.let { PairedDesktops.sameName(it.computer, off.computer) } == true }
+            if (seq == glowSeq && !litByTracking) DesktopHub.sendToComputer(off.computer, off.json())
+        }
+    }
+
     private fun start(context: Context) {
         FlickAim.start(context)
         val compass = FlickAim.isAvailable(context)
@@ -155,6 +176,45 @@ object PointTarget {
         }
         if (_choice.value != next) _choice.value = next
         sends.forEach { DesktopHub.sendToComputer(it.computer, it.json()) }
+    }
+}
+
+/**
+ * Reads the aim once, on a press, for cards that don't track live (the Home Scenes card, SPACE.md §11.1):
+ * [down] starts the compass when the finger lands, [pick] waits up to 400 ms for a reading, picks the target
+ * and glows the aimed screen once. Main thread only.
+ */
+class PointPressAim(context: Context) {
+    private val app = context.applicationContext
+    private var sensorOn = false
+    private var downAt = 0L
+
+    /** Finger down: start the compass so a reading is ready when the press ends. */
+    fun down() {
+        if (sensorOn) return
+        FlickAim.start(app)
+        sensorOn = true
+        downAt = System.currentTimeMillis()
+    }
+
+    /** The press ended without an action (or the card left the screen). */
+    fun cancel() {
+        if (!sensorOn) return
+        FlickAim.stop()
+        sensorOn = false
+    }
+
+    /** The target for this press (null: nothing connected); the aimed screen glows once with [label]. */
+    suspend fun pick(label: String): PointChoice? {
+        if (PointTarget.isTracking) PointTarget.choice.value?.let { return it }
+        down()
+        val compass = FlickAim.isAvailable(app)
+        while (compass && FlickAim.current() == null && System.currentTimeMillis() - downAt < PointPress.WAIT_MS) delay(20)
+        val reading = FlickAim.current()?.let { AimMatcher.Aim(it.first, it.second) }
+        cancel()
+        val choice = PointPick.choose(reading, PointTarget.savedMap(app), FlickPointing.computers(), DesktopHub.candidates())
+        PointTarget.glowOnce(choice, label)
+        return choice
     }
 }
 

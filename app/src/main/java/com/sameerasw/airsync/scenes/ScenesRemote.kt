@@ -21,8 +21,8 @@ import org.json.JSONObject
  * Phone → Mac: `runScene` {id}, `phoneActionResult` {requestId, ok, error|message},
  * `phoneEvent` {event:"headset"|"wifi", ...}.
  *
- * Point to act (SPACE.md §11.1): each computer's scenes are kept apart; the card shows the point target's
- * scenes and `runScene` goes to the target computer only.
+ * Point to act (SPACE.md §11.1): each computer's scenes are kept apart; a pressed scene runs on the computer
+ * the phone points at (read at press time, [com.sameerasw.airsync.multidesk.PointPress]).
  */
 object ScenesRemote {
     private const val TAG = "HIBScenes"
@@ -34,10 +34,6 @@ object ScenesRemote {
     private val _scenesBy = MutableStateFlow<Map<String, List<PhoneScene>>>(emptyMap())
     /** Each computer's scenes, by normalized computer name ("" when the sender wasn't known). */
     val scenesBy = _scenesBy.asStateFlow()
-
-    /** [computer]'s scenes in [byComputer] (falling back to scenes whose sender wasn't known). */
-    fun scenesFor(byComputer: Map<String, List<PhoneScene>>, computer: String?): List<PhoneScene> =
-        computer?.let { byComputer[PairedDesktops.normalizeName(it)] } ?: byComputer[""].orEmpty()
 
     private fun sourceKey(): String {
         val id = DesktopHub.currentSourceId() ?: return ""
@@ -87,12 +83,13 @@ object ScenesRemote {
         }
     }
 
-    fun run(id: String): Boolean {
+    /** Runs scene [id] on [to] only (null: the point target, else the usual route). */
+    fun run(id: String, to: String? = null): Boolean {
         val message = JSONObject()
             .put("type", "runScene")
             .put("data", JSONObject().put("id", id))
             .toString()
-        val sent = PointTarget.send(message)
+        val sent = if (to != null) DesktopHub.sendTo(to, message) else PointTarget.send(message)
         if (sent) {
             _running.value = _running.value + id
             // Never leave a button spinning if the Mac doesn't answer.

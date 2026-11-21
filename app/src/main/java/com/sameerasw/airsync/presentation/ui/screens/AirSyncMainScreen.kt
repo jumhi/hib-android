@@ -901,7 +901,7 @@ fun AirSyncMainScreen(
                                         enter = expandVertically() + fadeIn(),
                                         exit = shrinkVertically() + fadeOut()
                                     ) {
-                                        com.sameerasw.airsync.scenes.ScenesCard(active = pagerState.currentPage == 0)
+                                        com.sameerasw.airsync.scenes.ScenesCard()
                                     }
 
                                     // H.I.B: Do Not Disturb access prompt (hidden once granted)

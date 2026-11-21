@@ -156,6 +156,35 @@ class PointActTest {
         assertFalse(data(l.update(a, 1500).single().json()).has("label"))
     }
 
+    // MARK: - press-time pick (Home Scenes card)
+
+    @Test
+    fun aPressPicksWhereThePhonePointsAndGlowsOnce() {
+        val owners = mapOf(mac to listOf("focus", "movie"), pc to listOf("movie"))
+
+        // Pointing at the PC when pressed: the PC runs it, its screen glows once with "Scenes", then dark.
+        val atPc = PointPick.choose(aim(92f), saved, computers, candidates(macInUse = true))!!
+        assertEquals(pc, PointPress.sceneTarget(atPc, "movie", owners))
+        val (on, off) = PointPress.glow(atPc, PointLabels.SCENES)!!
+        assertEquals(AimLight.Send(pc, win1.id, "Scenes"), on)
+        assertEquals(AimLight.Send(pc, null), off)
+        assertEquals("Scenes", data(on.json()).get("label").asString)
+        assertTrue(data(off.json()).get("screen").isJsonNull)
+
+        // Aimed at a computer without that scene: nothing is sent there (the card says so).
+        assertNull(PointPress.sceneTarget(atPc, "focus", owners))
+        assertEquals(pc, PointPress.sceneTarget(atPc, "focus", owners, unknown = listOf("focus")))
+
+        // Not pointing at a screen: target rule, no glow; a scene only another computer has runs there.
+        val away = PointPick.choose(aim(200f), saved, computers, candidates())!!
+        assertNull(PointPress.glow(away, PointLabels.SCENES))
+        assertEquals(mac, PointPress.sceneTarget(away, "movie", owners))
+        val pcFirst = PointChoice(pc, TargetRule.Reason.IN_USE)
+        assertEquals(mac, PointPress.sceneTarget(pcFirst, "focus", owners))
+        assertNull(PointPress.sceneTarget(null, "movie", owners))
+        assertEquals(400L, PointPress.WAIT_MS)
+    }
+
     // MARK: - Desk Deck hand-over
 
     @Test

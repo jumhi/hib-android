@@ -144,3 +144,42 @@ class DeckHandover {
         return source == null || PairedDesktops.sameName(c, source)
     }
 }
+
+/**
+ * Point to act on a press (SPACE.md §11.1) for cards that don't track live (the Home Scenes card): the aim is
+ * read once when the card is pressed, the aimed screen glows once with the label, then goes dark. Nothing is
+ * lit just because the app is open.
+ */
+object PointPress {
+    /** How long a press waits for a compass reading (from finger down). */
+    const val WAIT_MS = 400L
+    /** How long the one glow stays before `flickAim{screen:null}`. */
+    const val GLOW_MS = 1500L
+    /** How long the "→ computer" chip shows after a press. */
+    const val CHIP_MS = 2000L
+
+    /** The one short glow for [choice]: lit now, dark after [GLOW_MS]. Null when no screen was aimed. */
+    fun glow(choice: PointChoice?, label: String): Pair<AimLight.Send, AimLight.Send>? {
+        val s = choice?.screen ?: return null
+        return AimLight.Send(s.computer, s.screen, label) to AimLight.Send(s.computer, null)
+    }
+
+    /**
+     * Where a pressed scene runs. Aimed at a computer: there when it has the scene, else null (say so, send
+     * nothing). Not aimed: the target-rule computer when it has it, else the first connected computer that does.
+     * @param owners each connected computer's scene ids, by computer name
+     * @param unknown scene ids whose sender wasn't known (any computer may have them)
+     */
+    fun sceneTarget(
+        choice: PointChoice?,
+        sceneId: String,
+        owners: Map<String, Collection<String>>,
+        unknown: Collection<String> = emptyList()
+    ): String? {
+        val c = choice ?: return null
+        val has = sceneId in unknown || owners.any { (name, ids) -> PairedDesktops.sameName(name, c.computer) && sceneId in ids }
+        if (has) return c.computer
+        if (c.aimed) return null
+        return owners.entries.firstOrNull { sceneId in it.value }?.key
+    }
+}

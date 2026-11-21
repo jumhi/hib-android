@@ -29,9 +29,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -42,34 +51,45 @@ import androidx.core.content.ContextCompat
 import com.sameerasw.airsync.R
 import com.sameerasw.airsync.multidesk.DesktopHub
 import com.sameerasw.airsync.multidesk.PairedDesktops
+import com.sameerasw.airsync.multidesk.PointChoice
 import com.sameerasw.airsync.multidesk.PointLabels
-import com.sameerasw.airsync.multidesk.PointTarget
+import com.sameerasw.airsync.multidesk.PointPress
+import com.sameerasw.airsync.multidesk.PointPressAim
 import com.sameerasw.airsync.multidesk.PointTargetChip
-import com.sameerasw.airsync.multidesk.rememberPointTarget
 import com.sameerasw.airsync.utils.HapticUtil
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
- * "Scenes" card: one button per scene the computer marked "Show on phone". Hidden when no connected computer
- * has any. Point to act (SPACE.md §11): it shows the scenes of the computer the phone points at (else the
- * target rule) and runs them there.
- *
- * @param active the page holding the card is the one on screen (pointing only runs then)
+ * "Scenes" card: one button per scene the connected computers marked "Show on phone". Hidden when there are
+ * none. Point to act (SPACE.md §11): nothing tracks while Home is open; pressing a scene reads where the phone
+ * points, runs it on that computer, glows that screen once ("Scenes") and shows "→ computer" for a moment.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ScenesCard(modifier: Modifier = Modifier, active: Boolean = true) {
+fun ScenesCard(modifier: Modifier = Modifier) {
     val byComputer by ScenesRemote.scenesBy.collectAsState()
     val running by ScenesRemote.running.collectAsState()
     val desktops by DesktopHub.desktops.collectAsState()
-    val anyScenes = byComputer[""].orEmpty().isNotEmpty() || desktops.any { d ->
-        d.isConnected && byComputer[PairedDesktops.normalizeName(d.name)].orEmpty().isNotEmpty()
-    }
-    if (!anyScenes) return
-    val pointed by rememberPointTarget(PointLabels.SCENES, enabled = active)
-    val target = pointed?.computer ?: PointTarget.targetId()
-    val scenes = ScenesRemote.scenesFor(byComputer, target)
+    val connected = desktops.filter { it.isConnected }.map { it.name }
+    val owners = connected.associateWith { n -> byComputer[PairedDesktops.normalizeName(n)].orEmpty().map { it.id } }
+    val unknown = byComputer[""].orEmpty()
+    val scenes = (connected.flatMap { byComputer[PairedDesktops.normalizeName(it)].orEmpty() } + unknown).distinctBy { it.id }
+    if (scenes.isEmpty()) return
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // The aim is read only when a scene is pressed (the compass starts on finger down).
+    val press = remember { PointPressAim(context) }
+    DisposableEffect(press) { onDispose { press.cancel() } }
+    var picked by remember { mutableStateOf<PointChoice?>(null) }
+    LaunchedEffect(picked) {
+        if (picked != null) {
+            delay(PointPress.CHIP_MS)
+            picked = null
+        }
+    }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -86,30 +106,41 @@ fun ScenesCard(modifier: Modifier = Modifier, active: Boolean = true) {
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f)
                 )
-                PointTargetChip(computer = if (active) target else null, aimed = pointed?.aimed == true)
-            }
-            if (scenes.isEmpty()) {
-                Text(
-                    text = "No scenes on ${target ?: "this computer"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                )
+                PointTargetChip(computer = picked?.computer, aimed = picked?.aimed == true)
             }
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                scenes.forEach { scene ->
+                scenes.forEach { scene -> key(scene.id) {
                     val isRunning = scene.id in running
+                    val interaction = remember { MutableInteractionSource() }
+                    LaunchedEffect(interaction) {
+                        interaction.interactions.collect {
+                            when (it) {
+                                is PressInteraction.Press -> press.down()
+                                is PressInteraction.Cancel -> press.cancel()
+                            }
+                        }
+                    }
                     Button(
                         onClick = {
                             HapticUtil.performClick(haptics)
-                            if (!ScenesRemote.run(scene.id)) {
-                                Toast.makeText(context, "Couldn't reach ${target ?: "your computer"}", Toast.LENGTH_SHORT).show()
+                            scope.launch {
+                                val choice = press.pick(PointLabels.SCENES)
+                                picked = choice
+                                val to = PointPress.sceneTarget(choice, scene.id, owners, unknown.map { it.id })
+                                val message = when {
+                                    choice == null -> if (ScenesRemote.run(scene.id)) null else "Your computer isn't connected"
+                                    to == null -> "“${scene.name}” isn't on ${choice.computer}"
+                                    !ScenesRemote.run(scene.id, to) -> "Couldn't reach $to"
+                                    else -> null
+                                }
+                                message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
                             }
                         },
+                        interactionSource = interaction,
                         enabled = !isRunning,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -130,7 +161,7 @@ fun ScenesCard(modifier: Modifier = Modifier, active: Boolean = true) {
                         Spacer(modifier = Modifier.size(8.dp))
                         Text(scene.name, style = MaterialTheme.typography.labelLarge, maxLines = 1)
                     }
-                }
+                } }
             }
         }
     }
