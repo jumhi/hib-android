@@ -5,6 +5,9 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.Toast
+import com.sameerasw.airsync.multidesk.DesktopHub
+import com.sameerasw.airsync.multidesk.PairedDesktops
+import com.sameerasw.airsync.multidesk.PointTarget
 import com.sameerasw.airsync.utils.WebSocketUtil
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +20,9 @@ import org.json.JSONObject
  * `sceneRunResult` {id, ok, message}.
  * Phone → Mac: `runScene` {id}, `phoneActionResult` {requestId, ok, error|message},
  * `phoneEvent` {event:"headset"|"wifi", ...}.
+ *
+ * Point to act (SPACE.md §11.1): each computer's scenes are kept apart; the card shows the point target's
+ * scenes and `runScene` goes to the target computer only.
  */
 object ScenesRemote {
     private const val TAG = "HIBScenes"
@@ -25,8 +31,18 @@ object ScenesRemote {
 
     private val main = Handler(Looper.getMainLooper())
 
-    private val _scenes = MutableStateFlow<List<PhoneScene>>(emptyList())
-    val scenes = _scenes.asStateFlow()
+    private val _scenesBy = MutableStateFlow<Map<String, List<PhoneScene>>>(emptyMap())
+    /** Each computer's scenes, by normalized computer name ("" when the sender wasn't known). */
+    val scenesBy = _scenesBy.asStateFlow()
+
+    /** [computer]'s scenes in [byComputer] (falling back to scenes whose sender wasn't known). */
+    fun scenesFor(byComputer: Map<String, List<PhoneScene>>, computer: String?): List<PhoneScene> =
+        computer?.let { byComputer[PairedDesktops.normalizeName(it)] } ?: byComputer[""].orEmpty()
+
+    private fun sourceKey(): String {
+        val id = DesktopHub.currentSourceId() ?: return ""
+        return if (id == "primary") "" else PairedDesktops.normalizeName(id)
+    }
 
     private val _running = MutableStateFlow<Set<String>>(emptySet())
     val running = _running.asStateFlow()
@@ -47,7 +63,8 @@ object ScenesRemote {
                             list.add(PhoneScene(id, o.optString("name", "Scene"), o.optString("icon")))
                         }
                     }
-                    _scenes.value = list
+                    val key = sourceKey()
+                    _scenesBy.value = _scenesBy.value + (key to list)
                     // The Mac sends this on every connect: make sure trigger reporting is running.
                     SceneEventMonitor.ensureStarted(appContext)
                 }
@@ -75,7 +92,7 @@ object ScenesRemote {
             .put("type", "runScene")
             .put("data", JSONObject().put("id", id))
             .toString()
-        val sent = WebSocketUtil.sendMessage(message)
+        val sent = PointTarget.send(message)
         if (sent) {
             _running.value = _running.value + id
             // Never leave a button spinning if the Mac doesn't answer.
@@ -85,7 +102,7 @@ object ScenesRemote {
     }
 
     fun reset() {
-        _scenes.value = emptyList()
+        _scenesBy.value = emptyMap()
         _running.value = emptySet()
     }
 

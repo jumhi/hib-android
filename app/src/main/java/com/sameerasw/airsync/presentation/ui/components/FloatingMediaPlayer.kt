@@ -71,6 +71,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sameerasw.airsync.domain.model.MacMusicInfo
+import com.sameerasw.airsync.multidesk.PointLabels
+import com.sameerasw.airsync.multidesk.PointTarget
+import com.sameerasw.airsync.multidesk.PointTargetChip
+import com.sameerasw.airsync.multidesk.pointChipWanted
+import com.sameerasw.airsync.multidesk.rememberPointTarget
 import com.sameerasw.airsync.presentation.ui.modifiers.liquidRipple
 import com.sameerasw.airsync.utils.HapticUtil
 import kotlinx.coroutines.launch
@@ -111,8 +116,10 @@ fun FloatingMediaPlayer(
         }
     }
 
+    // Room for the "→ computer" chip when there is more than one computer to point at.
+    val showTargetChip = pointChipWanted()
     val collapsedHeight = 72.dp
-    val expandedHeight = 280.dp
+    val expandedHeight = if (showTargetChip) 308.dp else 280.dp
 
     val collapsedPx = with(density) { collapsedHeight.toPx() }
     val expandedPx = with(density) { expandedHeight.toPx() }
@@ -131,6 +138,15 @@ fun FloatingMediaPlayer(
         )
     }
 
+    LaunchedEffect(expandedPx) {
+        anchoredDraggableState.updateAnchors(
+            DraggableAnchors {
+                DragValue.Collapsed at 0f
+                DragValue.Expanded at -(expandedPx - collapsedPx)
+            }
+        )
+    }
+
     // Trigger haptic feedback on expansion state change
     LaunchedEffect(anchoredDraggableState.currentValue) {
         HapticUtil.performLightTick(haptics)
@@ -139,6 +155,9 @@ fun FloatingMediaPlayer(
     // Sync state with anchoredDraggableState
     val currentOffset = anchoredDraggableState.requireOffset()
     val isExpanded = anchoredDraggableState.currentValue == DragValue.Expanded
+
+    // Point to act (SPACE.md §11): while the player is open, its controls go to the computer the phone points at.
+    val pointed by rememberPointTarget(PointLabels.MEDIA, enabled = isExpanded)
     val progress = if (currentOffset.isNaN()) 0f else {
         (currentOffset / -(expandedPx - collapsedPx)).coerceIn(0f, 1f)
     }
@@ -318,6 +337,11 @@ fun FloatingMediaPlayer(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
+                            )
+                            PointTargetChip(
+                                computer = if (isExpanded) pointed?.computer ?: PointTarget.targetId() else null,
+                                aimed = pointed?.aimed == true,
+                                modifier = Modifier.padding(top = 4.dp)
                             )
                         }
 

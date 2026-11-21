@@ -46,6 +46,9 @@ import com.sameerasw.airsync.MainActivity
 import com.sameerasw.airsync.R
 import com.sameerasw.airsync.multidesk.DesktopHub
 import com.sameerasw.airsync.multidesk.PairedDesktops
+import com.sameerasw.airsync.multidesk.PointLabels
+import com.sameerasw.airsync.multidesk.PointTargetChip
+import com.sameerasw.airsync.multidesk.rememberPointTarget
 import com.sameerasw.airsync.presentation.ui.components.cards.PlayTargetRow
 import com.sameerasw.airsync.ui.theme.AirSyncTheme
 import com.sameerasw.airsync.utils.HapticUtil
@@ -53,7 +56,8 @@ import com.sameerasw.airsync.utils.PhoneAudioRemote
 
 /**
  * "Play on…" chooser (long-press on the "Play on computer" Quick Settings tile): pick which connected
- * computer plays the phone's audio, or stop it.
+ * computer plays the phone's audio, or stop it. Point to act (SPACE.md §11): while it is open, the default
+ * is the computer the phone points at (else the target rule).
  */
 class PlayOnChooserActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,7 +91,9 @@ private fun PlayOnChooser(onDone: () -> Unit, onOpenApp: () -> Unit) {
     val desktops by DesktopHub.desktops.collectAsState()
     val playingOn by PhoneAudioRemote.playingOn.collectAsState()
     val online = desktops.filter { it.isConnected }
-    val pick = remember(desktops) { DesktopHub.targetPick() }
+    val pointed by rememberPointTarget(PointLabels.MEDIA)
+    val rulePick = remember(desktops) { DesktopHub.targetPick() }
+    val defaultId = pointed?.computer ?: rulePick?.id
 
     Box(
         modifier = Modifier
@@ -116,7 +122,11 @@ private fun PlayOnChooser(onDone: () -> Unit, onOpenApp: () -> Unit) {
                     )
                     Spacer(Modifier.width(10.dp))
                     Column {
-                        Text("Play on…", style = MaterialTheme.typography.titleLarge)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Play on…", style = MaterialTheme.typography.titleLarge)
+                            Spacer(Modifier.width(10.dp))
+                            PointTargetChip(computer = defaultId, aimed = pointed?.aimed == true)
+                        }
                         Text(
                             text = playingOn?.let { "Playing on $it" } ?: "Phone audio plays on one computer at a time",
                             style = MaterialTheme.typography.bodyMedium,
@@ -139,7 +149,7 @@ private fun PlayOnChooser(onDone: () -> Unit, onOpenApp: () -> Unit) {
                             platform = d.platform,
                             inUse = d.inUse,
                             playing = d.playing,
-                            isDefault = pick?.id?.let { PairedDesktops.sameName(it, d.name) } == true,
+                            isDefault = defaultId?.let { PairedDesktops.sameName(it, d.name) } == true,
                             onClick = {
                                 HapticUtil.performClick(haptics)
                                 PhoneAudioRemote.playOn(d.name)

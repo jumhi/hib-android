@@ -84,6 +84,11 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.sameerasw.airsync.multidesk.DesktopHub
+import com.sameerasw.airsync.multidesk.PairedDesktops
+import com.sameerasw.airsync.multidesk.PointLabels
+import com.sameerasw.airsync.multidesk.PointTargetChip
+import com.sameerasw.airsync.multidesk.rememberPointTarget
 import com.sameerasw.airsync.ui.theme.AirSyncTheme
 import com.sameerasw.airsync.utils.MacDeviceStatusManager
 import com.sameerasw.airsync.utils.PhoneAudioRemote
@@ -92,8 +97,9 @@ import kotlinx.coroutines.launch
 import java.util.Date
 
 /**
- * H.I.B Desk Deck: a full-screen, always-on control deck for the Mac.
- * Put the phone on a stand next to the Mac.
+ * H.I.B Desk Deck: a full-screen, always-on control deck for your computers.
+ * Put the phone on a stand next to the computer. Point to act (SPACE.md §11): the deck works on the computer
+ * the phone points at (else the target rule) and shows that computer's live state.
  */
 class DeskDeckActivity : ComponentActivity() {
 
@@ -123,13 +129,9 @@ class DeskDeckActivity : ComponentActivity() {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        DeskDeckRemote.setOpen(true)
-    }
-
+    // The deck opens on the point target once it is in front (DeskDeckScreen) and closes when it leaves.
     override fun onStop() {
-        DeskDeckRemote.setOpen(false)
+        DeskDeckRemote.close()
         super.onStop()
     }
 }
@@ -147,12 +149,19 @@ private fun DeskDeckScreen(onClose: () -> Unit) {
     val count by DeskDeckStore.tileCount(context).collectAsState(initial = 9)
     val stats by DeskDeckRemote.stats.collectAsState()
     val result by DeskDeckRemote.lastResult.collectAsState()
+    val deckOn by DeskDeckRemote.computer.collectAsState()
+
+    // Point to act: the deck follows where the phone points (deckOpen moves with the target).
+    val choice by rememberPointTarget(PointLabels.DESK_DECK)
+    LaunchedEffect(choice?.computer) { DeskDeckRemote.follow(choice?.computer) }
+    val target = choice?.computer ?: deckOn
+    val aimed = choice?.aimed == true
 
     var editingIndex by remember { mutableStateOf<Int?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
-    // Clock tick + keep the Mac streaming (re-announce if the stream went stale, e.g. after a reconnect).
+    // Clock tick + keep the computer streaming (re-announce if the stream went stale, e.g. after a reconnect).
     LaunchedEffect(Unit) {
         var sinceAnnounce = 0
         while (true) {
@@ -160,7 +169,7 @@ private fun DeskDeckScreen(onClose: () -> Unit) {
             sinceAnnounce++
             val last = DeskDeckRemote.stats.value?.receivedAt ?: 0L
             if (sinceAnnounce >= 8 && now - last > 6000) {
-                DeskDeckRemote.setOpen(true)
+                DeskDeckRemote.reopen()
                 sinceAnnounce = 0
             }
             delay(1000)
@@ -183,10 +192,10 @@ private fun DeskDeckScreen(onClose: () -> Unit) {
                     Modifier.weight(0.42f).fillMaxHeight(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    ClockBlock(now, onClose, onSettings = { showSettings = true })
-                    NowPlayingCard(Modifier.fillMaxWidth())
+                    ClockBlock(now, target, aimed, onClose, onSettings = { showSettings = true })
+                    NowPlayingCard(target, Modifier.fillMaxWidth())
                     EventCard(stats, now)
-                    StatsRow(stats, now)
+                    StatsRow(stats, now, target)
                 }
                 TileGrid(
                     tiles = visible,
@@ -197,10 +206,10 @@ private fun DeskDeckScreen(onClose: () -> Unit) {
             }
         } else {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ClockBlock(now, onClose, onSettings = { showSettings = true })
-                NowPlayingCard(Modifier.fillMaxWidth())
+                ClockBlock(now, target, aimed, onClose, onSettings = { showSettings = true })
+                NowPlayingCard(target, Modifier.fillMaxWidth())
                 EventCard(stats, now)
-                StatsRow(stats, now)
+                StatsRow(stats, now, target)
                 TileGrid(
                     tiles = visible,
                     columns = 3,
@@ -255,7 +264,7 @@ private fun DeskDeckScreen(onClose: () -> Unit) {
 }
 
 @Composable
-private fun ClockBlock(now: Long, onClose: () -> Unit, onSettings: () -> Unit) {
+private fun ClockBlock(now: Long, target: String?, aimed: Boolean, onClose: () -> Unit, onSettings: () -> Unit) {
     val context = LocalContext.current
     val is24 = DateFormat.is24HourFormat(context)
     val time = DateFormat.format(if (is24) "HH:mm" else "h:mm", Date(now)).toString()
@@ -270,6 +279,7 @@ private fun ClockBlock(now: Long, onClose: () -> Unit, onSettings: () -> Unit) {
                 lineHeight = 64.sp
             )
             Text(date, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+            PointTargetChip(computer = target, aimed = aimed, modifier = Modifier.padding(top = 6.dp))
         }
         IconButton(onClick = onSettings) {
             Icon(Icons.Rounded.Settings, contentDescription = "Deck settings", tint = Dim)
@@ -281,10 +291,14 @@ private fun ClockBlock(now: Long, onClose: () -> Unit, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun NowPlayingCard(modifier: Modifier) {
+private fun NowPlayingCard(target: String?, modifier: Modifier) {
     val status by MacDeviceStatusManager.macDeviceStatus.collectAsState()
     val art by MacDeviceStatusManager.albumArt.collectAsState()
-    val music = status?.music
+    val desktops by DesktopHub.desktops.collectAsState()
+    // Now playing is known for the main computer only; the controls always go to the target.
+    val onMain = target == null ||
+        desktops.firstOrNull { PairedDesktops.sameName(it.name, target) }?.isPrimary != false
+    val music = status?.music?.takeIf { onMain }
     val haptics = LocalHapticFeedback.current
     val hasMusic = music != null && (music.title.isNotBlank() || music.artist.isNotBlank())
 
@@ -313,7 +327,11 @@ private fun NowPlayingCard(modifier: Modifier) {
         }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(
-                if (hasMusic) music!!.title.ifBlank { "Unknown" } else "Nothing playing on the computer",
+                when {
+                    hasMusic -> music!!.title.ifBlank { "Unknown" }
+                    !onMain -> "Media on $target"
+                    else -> "Nothing playing on the computer"
+                },
                 color = Color.White,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
@@ -384,11 +402,11 @@ private fun EventCard(stats: DeskDeckRemote.MacStats?, now: Long) {
 }
 
 @Composable
-private fun StatsRow(stats: DeskDeckRemote.MacStats?, now: Long) {
+private fun StatsRow(stats: DeskDeckRemote.MacStats?, now: Long, target: String?) {
     val stale = stats == null || now - stats.receivedAt > 6000
     if (stale) {
         Text(
-            "Waiting for your computer…",
+            "Waiting for ${target ?: "your computer"}…",
             color = Dim,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 4.dp)

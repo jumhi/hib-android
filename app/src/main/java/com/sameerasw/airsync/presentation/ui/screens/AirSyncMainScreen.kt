@@ -230,7 +230,7 @@ fun AirSyncMainScreen(
         }
     }
 
-    fun sendRemoteAction(action: String, value: Any? = null) {
+    fun sendRemoteAction(action: String, value: Any? = null, pointed: Boolean = false) {
         scope.launch {
             try {
                 HapticUtil.performLightTick(haptics)
@@ -240,12 +240,18 @@ fun AirSyncMainScreen(
                 data.put("action", action)
                 if (value != null) data.put("value", value)
                 json.put("data", data)
-                WebSocketUtil.sendMessage(json.toString())
+                // Point to act (SPACE.md §11): media controls go to the computer the phone points at while a
+                // point-aware screen (the Remote, the open player…) is in front.
+                if (pointed) com.sameerasw.airsync.multidesk.PointTarget.sendOrRoute(json.toString())
+                else WebSocketUtil.sendMessage(json.toString())
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
     }
+
+    /** The computer media controls (the floating player): to the point target (SPACE.md §11.1). */
+    fun sendMediaAction(action: String, value: Any? = null) = sendRemoteAction(action, value, pointed = true)
 
     val pagerState =
         rememberPagerState(
@@ -895,7 +901,7 @@ fun AirSyncMainScreen(
                                         enter = expandVertically() + fadeIn(),
                                         exit = shrinkVertically() + fadeOut()
                                     ) {
-                                        com.sameerasw.airsync.scenes.ScenesCard()
+                                        com.sameerasw.airsync.scenes.ScenesCard(active = pagerState.currentPage == 0)
                                     }
 
                                     // H.I.B: Do Not Disturb access prompt (hidden once granted)
@@ -1258,7 +1264,8 @@ fun AirSyncMainScreen(
                                             bottom = if (isLandscape) 100.dp else 180.dp
                                         ),
                                     showKeyboard = showKeyboard,
-                                    onDismissKeyboard = { showKeyboard = false }
+                                    onDismissKeyboard = { showKeyboard = false },
+                                    isActive = pagerState.currentPage == 1
                                 )
                             } else {
                                 // When disconnected: page 1 = Settings
@@ -1385,13 +1392,13 @@ fun AirSyncMainScreen(
                                     isMuted = isMuted,
                                     onVolumeChange = {
                                         volume = it
-                                        sendRemoteAction("vol_set", it.toInt())
+                                        sendMediaAction("vol_set", it.toInt())
                                     },
                                     onToggleMute = {
-                                        sendRemoteAction("vol_mute")
+                                        sendMediaAction("vol_mute")
                                         isMuted = !isMuted
                                     },
-                                    onMediaAction = { sendRemoteAction(it) },
+                                    onMediaAction = { sendMediaAction(it) },
                                     isRippleEnabled = uiState.isRippleSettingEnabled
                                 )
                             }
@@ -1450,13 +1457,13 @@ fun AirSyncMainScreen(
                                     isMuted = isMuted,
                                     onVolumeChange = {
                                         volume = it
-                                        sendRemoteAction("vol_set", it.toInt())
+                                        sendMediaAction("vol_set", it.toInt())
                                     },
                                     onToggleMute = {
-                                        sendRemoteAction("vol_mute")
+                                        sendMediaAction("vol_mute")
                                         isMuted = !isMuted
                                     },
-                                    onMediaAction = { sendRemoteAction(it) },
+                                    onMediaAction = { sendMediaAction(it) },
                                     isRippleEnabled = uiState.isRippleSettingEnabled
                                 )
                             }

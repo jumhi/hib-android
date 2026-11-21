@@ -40,15 +40,34 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.sameerasw.airsync.R
+import com.sameerasw.airsync.multidesk.DesktopHub
+import com.sameerasw.airsync.multidesk.PairedDesktops
+import com.sameerasw.airsync.multidesk.PointLabels
+import com.sameerasw.airsync.multidesk.PointTarget
+import com.sameerasw.airsync.multidesk.PointTargetChip
+import com.sameerasw.airsync.multidesk.rememberPointTarget
 import com.sameerasw.airsync.utils.HapticUtil
 
-/** "Scenes" card: one button per scene the Mac marked "Show on phone". Hidden when there are none. */
+/**
+ * "Scenes" card: one button per scene the computer marked "Show on phone". Hidden when no connected computer
+ * has any. Point to act (SPACE.md §11): it shows the scenes of the computer the phone points at (else the
+ * target rule) and runs them there.
+ *
+ * @param active the page holding the card is the one on screen (pointing only runs then)
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ScenesCard(modifier: Modifier = Modifier) {
-    val scenes by ScenesRemote.scenes.collectAsState()
+fun ScenesCard(modifier: Modifier = Modifier, active: Boolean = true) {
+    val byComputer by ScenesRemote.scenesBy.collectAsState()
     val running by ScenesRemote.running.collectAsState()
-    if (scenes.isEmpty()) return
+    val desktops by DesktopHub.desktops.collectAsState()
+    val anyScenes = byComputer[""].orEmpty().isNotEmpty() || desktops.any { d ->
+        d.isConnected && byComputer[PairedDesktops.normalizeName(d.name)].orEmpty().isNotEmpty()
+    }
+    if (!anyScenes) return
+    val pointed by rememberPointTarget(PointLabels.SCENES, enabled = active)
+    val target = pointed?.computer ?: PointTarget.targetId()
+    val scenes = ScenesRemote.scenesFor(byComputer, target)
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
 
@@ -58,11 +77,25 @@ fun ScenesCard(modifier: Modifier = Modifier) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceBright)
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-            Text(
-                text = "Scenes",
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 8.dp)
+            ) {
+                Text(
+                    text = "Scenes",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                PointTargetChip(computer = if (active) target else null, aimed = pointed?.aimed == true)
+            }
+            if (scenes.isEmpty()) {
+                Text(
+                    text = "No scenes on ${target ?: "this computer"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
+            }
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -74,7 +107,7 @@ fun ScenesCard(modifier: Modifier = Modifier) {
                         onClick = {
                             HapticUtil.performClick(haptics)
                             if (!ScenesRemote.run(scene.id)) {
-                                Toast.makeText(context, "Your computer isn't connected", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Couldn't reach ${target ?: "your computer"}", Toast.LENGTH_SHORT).show()
                             }
                         },
                         enabled = !isRunning,

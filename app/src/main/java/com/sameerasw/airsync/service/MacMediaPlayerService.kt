@@ -450,7 +450,9 @@ class MacMediaPlayerService : Service() {
             }
 
             val controlJson = """{"type":"macMediaControl","data":{"action":"$action"}}"""
-            com.sameerasw.airsync.utils.WebSocketUtil.sendMessage(controlJson)
+            // Point to act (SPACE.md §11.1): to the computer the phone points at while a point-aware screen
+            // is open; otherwise to the main computer, whose music this notification shows.
+            com.sameerasw.airsync.multidesk.PointTarget.sendOrRoute(controlJson)
             Log.d(TAG, "Sent Mac media control: $action")
         } catch (e: Exception) {
             Log.e(TAG, "Error sending Mac media control: ${e.message}")

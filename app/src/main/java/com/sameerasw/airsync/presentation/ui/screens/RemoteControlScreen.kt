@@ -61,11 +61,14 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.sameerasw.airsync.R
+import com.sameerasw.airsync.multidesk.PointLabels
+import com.sameerasw.airsync.multidesk.PointTarget
+import com.sameerasw.airsync.multidesk.PointTargetChip
+import com.sameerasw.airsync.multidesk.rememberPointTarget
 import com.sameerasw.airsync.presentation.ui.components.KeyboardInputSheet
 import com.sameerasw.airsync.presentation.ui.components.KeyboardModifiers
 import com.sameerasw.airsync.presentation.ui.components.ModifierStatus
 import com.sameerasw.airsync.utils.HapticUtil
-import com.sameerasw.airsync.utils.WebSocketUtil
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -77,7 +80,9 @@ import org.json.JSONObject
 fun RemoteControlScreen(
     modifier: Modifier = Modifier,
     showKeyboard: Boolean,
-    onDismissKeyboard: () -> Unit
+    onDismissKeyboard: () -> Unit,
+    /** This page is the one on screen (pointing only runs then). */
+    isActive: Boolean = true
 ) {
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -85,6 +90,9 @@ fun RemoteControlScreen(
     val dataStoreManager =
         remember { com.sameerasw.airsync.data.local.DataStoreManager.getInstance(context) }
     val isFlipped by dataStoreManager.isRemoteFlipped().collectAsState(initial = null)
+
+    // Point to act (SPACE.md §11): keys, arrows, text and the trackpad go to the computer the phone points at.
+    val pointed by rememberPointTarget(PointLabels.REMOTE, enabled = isActive)
 
     if (isFlipped == null) return
     val flippedValue = isFlipped!!
@@ -115,7 +123,7 @@ fun RemoteControlScreen(
                     }
                 }
                 json.put("data", data)
-                WebSocketUtil.sendMessage(json.toString())
+                PointTarget.send(json.toString())
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -485,8 +493,15 @@ fun RemoteControlScreen(
         }
     }
 
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    PointTargetChip(
+        computer = if (isActive) pointed?.computer ?: PointTarget.targetId() else null,
+        aimed = pointed?.aimed == true,
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
     AnimatedContent(
         targetState = flippedValue,
+        modifier = Modifier.weight(1f),
         transitionSpec = {
             if (isWide) {
                 if (targetState) {
@@ -506,7 +521,7 @@ fun RemoteControlScreen(
     ) { flipped ->
         if (isWide) {
             Row(
-                modifier = modifier
+                modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(24.dp),
@@ -551,7 +566,7 @@ fun RemoteControlScreen(
             }
         } else {
             Column(
-                modifier = modifier
+                modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -576,6 +591,7 @@ fun RemoteControlScreen(
                 }
             }
         }
+    }
     }
 }
 

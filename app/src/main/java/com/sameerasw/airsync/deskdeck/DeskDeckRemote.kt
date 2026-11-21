@@ -1,14 +1,20 @@
 package com.sameerasw.airsync.deskdeck
 
-import com.sameerasw.airsync.utils.WebSocketUtil
+import com.sameerasw.airsync.multidesk.DeckHandover
+import com.sameerasw.airsync.multidesk.DesktopHub
+import com.sameerasw.airsync.multidesk.PointTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 
 /**
  * H.I.B Desk Deck link state.
- * phone -> Mac: deckOpen {open}, deckAction {action, arg?}
- * Mac -> phone: deckState {...} every 2 s while open, deckActionResult {action, ok, error?}
+ * phone -> computer: deckOpen {open}, deckAction {action, arg?}
+ * computer -> phone: deckState {...} every 2 s while open, deckActionResult {action, ok, error?}
+ *
+ * Point to act (SPACE.md §11.1): the deck follows the point target. When it changes, the deck closes on the
+ * old computer and opens on the new one, shows only that computer's live state, and every tile goes to the
+ * target computer only.
  */
 object DeskDeckRemote {
 
@@ -29,32 +35,65 @@ object DeskDeckRemote {
 
     data class ActionResult(val action: String, val ok: Boolean, val error: String?, val at: Long)
 
+    private val handover = DeckHandover()
+
     private val _stats = MutableStateFlow<MacStats?>(null)
+    /** The live state of the computer the deck is open on. */
     val stats = _stats.asStateFlow()
+
+    private val _computer = MutableStateFlow<String?>(null)
+    /** The computer the deck is open on (null while closed). */
+    val computer = _computer.asStateFlow()
 
     private val _lastResult = MutableStateFlow<ActionResult?>(null)
     val lastResult = _lastResult.asStateFlow()
 
-    fun setOpen(open: Boolean): Boolean {
-        val msg = JSONObject()
-            .put("type", "deckOpen")
-            .put("data", JSONObject().put("open", open))
-            .toString()
-        return WebSocketUtil.sendMessage(msg)
+    /** The deck is on screen and the point target is [target]: open it there (closing it where it was). */
+    fun follow(target: String?) {
+        if (target == null) return  // nothing decided (yet): stay where it is
+        val sends = synchronized(handover) {
+            val out = handover.moveTo(target)
+            if (out.isNotEmpty()) {
+                _computer.value = handover.current
+                _stats.value = null  // that computer's state arrives within ~2 s
+            }
+            out
+        }
+        sends.forEach { DesktopHub.sendTo(it.computer, it.json()) }
+    }
+
+    /** Asks the deck's computer to stream again (the stream stops after a reconnect). */
+    fun reopen() {
+        val send = synchronized(handover) { handover.reopen() } ?: return
+        DesktopHub.sendTo(send.computer, send.json())
+    }
+
+    /** The deck left the screen. */
+    fun close() {
+        val sends = synchronized(handover) {
+            val out = handover.close()
+            _computer.value = null
+            _stats.value = null
+            out
+        }
+        sends.forEach { DesktopHub.sendTo(it.computer, it.json()) }
     }
 
     fun sendAction(action: String, arg: String? = null): Boolean {
         val data = JSONObject().put("action", action)
         if (!arg.isNullOrBlank()) data.put("arg", arg)
         val msg = JSONObject().put("type", "deckAction").put("data", data).toString()
-        val sent = WebSocketUtil.sendMessage(msg)
+        val sent = PointTarget.send(msg)
         if (!sent) {
-            _lastResult.value = ActionResult(action, false, "Not connected to your computer", System.currentTimeMillis())
+            val who = PointTarget.targetId() ?: "your computer"
+            _lastResult.value = ActionResult(action, false, "Couldn't reach $who", System.currentTimeMillis())
         }
         return sent
     }
 
     fun onDeckState(data: JSONObject) {
+        // Only the computer the deck is on (another may still be streaming until its deckOpen{open:false} lands).
+        if (!synchronized(handover) { handover.accepts(DesktopHub.currentSourceId()) }) return
         val ev = data.optJSONObject("nextEvent")?.let {
             NextEvent(
                 title = it.optString("title", "Event"),
