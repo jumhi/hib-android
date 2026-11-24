@@ -49,8 +49,8 @@ import com.sameerasw.airsync.utils.HapticUtil
 /**
  * H.I.B — Flick entry on the main screen. Anything can be flicked: photos and videos (system photo
  * picker, no permission needed), any file (system file picker), or what's on the clipboard (text, a link,
- * or a copied file/image). Each opens the Flick screen; point the phone at a screen and throw. The tune
- * button opens Flick settings (Point & Flick).
+ * or a copied file/image). Each opens the Flick screen; point the phone at a screen and throw. Several picks
+ * are one bundle, thrown together (SPACE.md §14). The tune button opens Flick settings (Point & Flick).
  */
 @Composable
 fun FlickCard(modifier: Modifier = Modifier) {
@@ -58,7 +58,7 @@ fun FlickCard(modifier: Modifier = Modifier) {
     val haptics = LocalHapticFeedback.current
 
     val media = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(maxItems = 20)
+        ActivityResultContracts.PickMultipleVisualMedia(maxItems = 50)
     ) { uris: List<Uri> -> openFlick(context, uris) }
 
     val files = rememberLauncherForActivityResult(
@@ -115,7 +115,8 @@ fun FlickCard(modifier: Modifier = Modifier) {
                 }
             }
             Text(
-                text = "Point your phone at a screen and flick it up. Works from any app's Share menu too.",
+                text = "Point your phone at a screen and flick it up. Pick several and one flick throws them all. " +
+                    "Also in every app's Share menu, the Flick tile and the Flick widget.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp)

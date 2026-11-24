@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- H.I.B Flick: the overlay's palette (HibInk, HibCyan, HibLime, HibPanel) for widgets, tiles and icons. -->
+<resources>
+    <color name="hib_flick_ink">#FF090C21</color>
+    <color name="hib_flick_panel">#FF1A2147</color>
+    <color name="hib_flick_cyan">#FF20D9FF</color>
+    <color name="hib_flick_lime">#FFBAFF38</color>
+    <color name="hib_flick_text">#FFFFFFFF</color>
+    <color name="hib_flick_text_dim">#B3FFFFFF</color>
+    <color name="hib_flick_scrim">#8C000000</color>
+</resources>

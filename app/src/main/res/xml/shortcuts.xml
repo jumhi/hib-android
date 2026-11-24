@@ -4,4 +4,12 @@
         <data android:mimeType="*/*" />
         <category android:name="com.sameerasw.airsync.categories.SHARE_TARGET_FILE" />
     </share-target>
+    <!-- H.I.B Flick: Direct Share target, so "Flick" sits at the top of the share sheet with its own icon -->
+    <share-target android:targetClass="com.sameerasw.airsync.presentation.ui.activities.FlickActivity">
+        <data android:mimeType="image/*" />
+        <data android:mimeType="video/*" />
+        <data android:mimeType="text/plain" />
+        <data android:mimeType="*/*" />
+        <category android:name="com.sameerasw.airsync.categories.FLICK" />
+    </share-target>
 </shortcuts>

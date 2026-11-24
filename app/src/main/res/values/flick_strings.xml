@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flick_widget_description">Your latest photos and screenshots. Tap one to flick it to the computer you point at, or select several and flick them together.</string>
+    <string name="flick_widget_label">Flick</string>
+    <string name="flick_tile_label">Flick</string>
+</resources>
