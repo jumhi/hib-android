@@ -211,7 +211,7 @@ class FlickActivity : ComponentActivity() {
                 }
                 type = "*/*"
                 if (widgetId != 0) putExtra(EXTRA_WIDGET_ID, widgetId)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
     }
 
@@ -270,15 +270,26 @@ class FlickActivity : ComponentActivity() {
         val setupOnly = intent?.getBooleanExtra(EXTRA_POINT_SETUP, false) == true
         val wantsPick = intent?.getBooleanExtra(EXTRA_PICK, false) == true
         val wantsRecent = intent?.getBooleanExtra(EXTRA_RECENT, false) == true
-        if (!setupOnly) items.addAll(FlickMedia.parseIntent(this, intent))
+        val shared = !setupOnly && FlickMedia.hasContent(intent)
         intent?.getIntExtra(EXTRA_WIDGET_ID, 0)?.takeIf { it != 0 }?.let { FlickWidget.clearSelection(this, it) }
 
-        if (!setupOnly && items.isEmpty() && !wantsPick && !wantsRecent) {
+        if (!setupOnly && !shared && !wantsPick && !wantsRecent) {
             Toast.makeText(this, "Nothing to flick", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
-        if (savedInstanceState == null && items.isEmpty() && !setupOnly) {
+        if (shared) {
+            // Names, types and sizes take a query or three per item: off the main thread (a bundle can be 50).
+            lifecycleScope.launch {
+                val parsed = withContext(Dispatchers.IO) { FlickMedia.parseIntent(this@FlickActivity, intent) }
+                if (parsed.isEmpty() && items.isEmpty()) {
+                    Toast.makeText(this@FlickActivity, "Nothing to flick", Toast.LENGTH_SHORT).show()
+                    finish()
+                } else {
+                    items.addAll(0, parsed)
+                }
+            }
+        } else if (savedInstanceState == null && !setupOnly) {
             if (wantsPick) {
                 openPicker()
             } else if (wantsRecent) {
@@ -1440,6 +1451,15 @@ object FlickMedia {
     const val SMALL_PREVIEW_PX = 360
     private const val THUMB_PX = 256
     private const val THUMB_MAX_B64 = 40_000
+
+    /** True when [intent] carries something to flick (cheap: no queries). */
+    fun hasContent(intent: Intent?): Boolean {
+        intent ?: return false
+        if (streamListExtra(intent).isNotEmpty() || streamExtra(intent) != null) return true
+        val clip = intent.clipData
+        if (clip != null && (0 until clip.itemCount).any { clip.getItemAt(it).uri != null }) return true
+        return !intent.getStringExtra(Intent.EXTRA_TEXT).isNullOrBlank()
+    }
 
     fun parseIntent(context: Context, intent: Intent?): List<FlickItem> {
         intent ?: return emptyList()

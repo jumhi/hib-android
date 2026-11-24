@@ -148,7 +148,7 @@ class FlickBundleActivity : ComponentActivity() {
                 putExtra(EXTRA_TITLE, title)
                 putExtra(EXTRA_SHARE, share)
                 putExtra(EXTRA_NOTIF, notifId)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         }
 

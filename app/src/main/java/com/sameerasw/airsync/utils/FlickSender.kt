@@ -201,7 +201,7 @@ object FlickSender {
                 }
                 if (!ok) {
                     sendCancel(flickId, to)
-                    toast(appContext, "Flick: couldn't send $name" + (to?.let { " to $it" } ?: ""))
+                    reportFailure(appContext, name, to)
                 }
             }
             true
@@ -342,7 +342,25 @@ object FlickSender {
         return -1
     }
 
-    private fun toast(context: Context, text: String) {
-        mainHandler.post { Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    private val failures = mutableListOf<Pair<String, String?>>()
+    private var failureToastPending = false
+
+    /** One toast for the files that couldn't go in the same moment (a lost link fails a whole bundle). */
+    private fun reportFailure(context: Context, name: String, to: String?) {
+        synchronized(failures) {
+            failures += name to to
+            if (failureToastPending) return
+            failureToastPending = true
+        }
+        mainHandler.postDelayed({
+            val list = synchronized(failures) {
+                failureToastPending = false
+                failures.toList().also { failures.clear() }
+            }
+            if (list.isEmpty()) return@postDelayed
+            val where = list.mapNotNull { it.second }.distinct().singleOrNull()?.let { " to $it" } ?: ""
+            val what = if (list.size == 1) list.first().first else "${list.size} files"
+            Toast.makeText(context, "Flick: couldn't send $what$where", Toast.LENGTH_SHORT).show()
+        }, 900)
     }
 }
