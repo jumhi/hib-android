@@ -1118,6 +1118,12 @@ class AirSyncViewModel(
         _uiState.value = _uiState.value.copy(clipboardHistory = emptyList())
     }
 
+    /** Undo for "clear history": puts the entries back (newer ones that arrived meanwhile stay on top). */
+    fun restoreClipboardHistory(entries: List<com.sameerasw.airsync.domain.model.ClipboardEntry>) {
+        val now = _uiState.value.clipboardHistory
+        _uiState.value = _uiState.value.copy(clipboardHistory = (now + entries).distinct().take(100))
+    }
+
     fun clearDisconnectionClipboardHistory() {
         // Clear clipboard history when disconnected
         _uiState.value = _uiState.value.copy(clipboardHistory = emptyList())

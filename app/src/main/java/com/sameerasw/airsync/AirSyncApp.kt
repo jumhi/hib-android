@@ -29,6 +29,8 @@ class AirSyncApp : Application() {
 
         // H.I.B multi-desktop: keep sessions to every other paired computer alongside the primary one.
         com.sameerasw.airsync.multidesk.DesktopHub.start(this)
+        // H.I.B widgets follow every computer's live state.
+        com.sameerasw.airsync.widget.HibWidgets.start(this)
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
             override fun onActivityStarted(activity: Activity) {

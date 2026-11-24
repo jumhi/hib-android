@@ -446,6 +446,20 @@ class DataStoreManager(private val context: Context) {
         }
     }
 
+    /** H.I.B: "Forget this computer" for the computer on the primary connection. */
+    suspend fun clearLastConnectedDevice() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(LAST_CONNECTED_PC_NAME)
+            preferences.remove(LAST_CONNECTED_PC_IP)
+            preferences.remove(LAST_CONNECTED_PC_PORT)
+            preferences.remove(LAST_CONNECTED_TIMESTAMP)
+            preferences.remove(LAST_CONNECTED_PC_PLUS)
+            preferences.remove(LAST_CONNECTED_SYMMETRIC_KEY)
+            preferences.remove(LAST_CONNECTED_MODEL)
+            preferences.remove(LAST_CONNECTED_DEVICE_TYPE)
+        }
+    }
+
     fun getLastConnectedDevice(): Flow<ConnectedDevice?> {
         return context.dataStore.data.map { preferences ->
             val name = preferences[LAST_CONNECTED_PC_NAME]

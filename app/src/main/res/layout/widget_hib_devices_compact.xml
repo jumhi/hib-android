@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- H.I.B widget. Generated layout: keep ids in sync with the provider. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/hib_widget_clip"
+    android:clipToOutline="true">
+
+    <ImageView
+        android:id="@+id/hw_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:src="@drawable/hib_widget_bg" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <LinearLayout
+            android:id="@+id/hw_slot0"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/hib_widget_row"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp">
+
+            <ImageView
+                android:id="@+id/hw_slot0_circle"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:src="@drawable/hib_widget_circle" />
+
+            <ImageView
+                android:id="@+id/hw_slot0_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:importantForAccessibility="no"
+                android:src="@drawable/hib_wic_laptop"
+                android:tint="@color/hib_widget_on_container" />
+            <ImageView
+                android:id="@+id/hw_slot0_dot"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_gravity="bottom|end"
+                android:background="@drawable/hib_widget_dot_ring"
+                android:importantForAccessibility="no"
+                android:padding="2dp"
+                android:src="@drawable/hib_widget_dot"
+                android:tint="@color/hib_widget_dot_off"
+                android:visibility="visible" />
+        </FrameLayout>
+
+            <TextView
+            android:id="@+id/hw_slot0_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="@color/hib_widget_on_surface"
+            android:textSize="11sp"
+            android:layout_marginTop="3dp" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/hw_slot1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/hib_widget_row"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp">
+
+            <ImageView
+                android:id="@+id/hw_slot1_circle"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:src="@drawable/hib_widget_circle" />
+
+            <ImageView
+                android:id="@+id/hw_slot1_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:importantForAccessibility="no"
+                android:src="@drawable/hib_wic_laptop"
+                android:tint="@color/hib_widget_on_container" />
+            <ImageView
+                android:id="@+id/hw_slot1_dot"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_gravity="bottom|end"
+                android:background="@drawable/hib_widget_dot_ring"
+                android:importantForAccessibility="no"
+                android:padding="2dp"
+                android:src="@drawable/hib_widget_dot"
+                android:tint="@color/hib_widget_dot_off"
+                android:visibility="visible" />
+        </FrameLayout>
+
+            <TextView
+            android:id="@+id/hw_slot1_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="@color/hib_widget_on_surface"
+            android:textSize="11sp"
+            android:layout_marginTop="3dp" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/hw_slot2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/hib_widget_row"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp">
+
+            <ImageView
+                android:id="@+id/hw_slot2_circle"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:src="@drawable/hib_widget_circle" />
+
+            <ImageView
+                android:id="@+id/hw_slot2_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:importantForAccessibility="no"
+                android:src="@drawable/hib_wic_laptop"
+                android:tint="@color/hib_widget_on_container" />
+            <ImageView
+                android:id="@+id/hw_slot2_dot"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_gravity="bottom|end"
+                android:background="@drawable/hib_widget_dot_ring"
+                android:importantForAccessibility="no"
+                android:padding="2dp"
+                android:src="@drawable/hib_widget_dot"
+                android:tint="@color/hib_widget_dot_off"
+                android:visibility="visible" />
+        </FrameLayout>
+
+            <TextView
+            android:id="@+id/hw_slot2_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="@color/hib_widget_on_surface"
+            android:textSize="11sp"
+            android:layout_marginTop="3dp" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/hw_slot3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/hib_widget_row"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp">
+
+            <ImageView
+                android:id="@+id/hw_slot3_circle"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:src="@drawable/hib_widget_circle" />
+
+            <ImageView
+                android:id="@+id/hw_slot3_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:importantForAccessibility="no"
+                android:src="@drawable/hib_wic_laptop"
+                android:tint="@color/hib_widget_on_container" />
+            <ImageView
+                android:id="@+id/hw_slot3_dot"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_gravity="bottom|end"
+                android:background="@drawable/hib_widget_dot_ring"
+                android:importantForAccessibility="no"
+                android:padding="2dp"
+                android:src="@drawable/hib_widget_dot"
+                android:tint="@color/hib_widget_dot_off"
+                android:visibility="visible" />
+        </FrameLayout>
+
+            <TextView
+            android:id="@+id/hw_slot3_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="@color/hib_widget_on_surface"
+            android:textSize="11sp"
+            android:layout_marginTop="3dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/hw_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:text="Open H.I.B to add a computer"
+            android:textColor="@color/hib_widget_on_surface_variant"
+            android:textSize="12sp"
+            android:visibility="gone"
+             />
+    </LinearLayout>
+</FrameLayout>

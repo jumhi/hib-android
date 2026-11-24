@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- H.I.B widgets (Devices, Media, Desk Deck, Clipboard, Computer in use). Static palette for Android 11;
+     Android 12+ uses the wallpaper colours (values-v31). -->
+<resources>
+    <color name="hib_widget_surface">#F4F6FB</color>
+    <color name="hib_widget_on_surface">#151A24</color>
+    <color name="hib_widget_on_surface_variant">#535B6B</color>
+    <color name="hib_widget_container">#E1E7F2</color>
+    <color name="hib_widget_on_container">#1A2233</color>
+    <color name="hib_widget_accent">#00687B</color>
+    <color name="hib_widget_on_accent">#FFFFFF</color>
+    <color name="hib_widget_accent_container">#B5ECF8</color>
+    <color name="hib_widget_on_accent_container">#001F26</color>
+    <color name="hib_widget_dot_in_use">#7BC000</color>
+    <color name="hib_widget_dot_connected">#2EAD4B</color>
+    <color name="hib_widget_dot_busy">#E59A00</color>
+    <color name="hib_widget_dot_off">#9AA1AD</color>
+    <color name="hib_widget_dot_alert">#D93025</color>
+</resources>

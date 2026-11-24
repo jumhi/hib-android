@@ -42,7 +42,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Delete
@@ -61,6 +60,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -103,7 +106,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.sameerasw.airsync.R
-import com.sameerasw.airsync.data.local.DataStoreManager
 import com.sameerasw.airsync.presentation.ui.activities.QRScannerActivity
 import com.sameerasw.airsync.presentation.ui.components.AirSyncFloatingToolbar
 import com.sameerasw.airsync.presentation.ui.components.FloatingMediaPlayer
@@ -111,11 +113,14 @@ import com.sameerasw.airsync.presentation.ui.components.IPhoneMirrorOverlay
 import com.sameerasw.airsync.presentation.ui.components.RoundedCardContainer
 import com.sameerasw.airsync.presentation.ui.components.SettingsView
 import com.sameerasw.airsync.presentation.ui.components.buttons.ListExpandToggleButton
-import com.sameerasw.airsync.presentation.ui.components.cards.ConnectionStatusCard
-import com.sameerasw.airsync.presentation.ui.components.cards.IconToggleItem
-import com.sameerasw.airsync.presentation.ui.components.cards.LastConnectedDeviceCard
-import com.sameerasw.airsync.presentation.ui.components.cards.RateAppCard
-import com.sameerasw.airsync.presentation.ui.components.cards.RemoteFunctionsCard
+import com.sameerasw.airsync.home.DeviceActions
+import com.sameerasw.airsync.home.UndoTicket
+import com.sameerasw.airsync.multidesk.ComputerLiveStore
+import com.sameerasw.airsync.multidesk.DesktopHub
+import com.sameerasw.airsync.multidesk.PairingQr
+import com.sameerasw.airsync.multidesk.NearbyComputersCard
+import com.sameerasw.airsync.multidesk.YourDevicesSection
+import com.sameerasw.airsync.widget.WidgetModels
 import com.sameerasw.airsync.presentation.ui.components.dialogs.ConnectionDialog
 import com.sameerasw.airsync.presentation.ui.components.sheets.HelpSupportBottomSheet
 import com.sameerasw.airsync.presentation.ui.composables.WelcomeScreen
@@ -160,14 +165,18 @@ fun AirSyncMainScreen(
     onTitleChange: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val dataStoreManager = remember { DataStoreManager.getInstance(context) }
-    val bleSyncEnabled by dataStoreManager.getBleSyncEnabled().collectAsState(initial = false)
-    var showConfigureLastDevice by rememberSaveable { mutableStateOf(false) }
     val viewModel: AirSyncViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
         AirSyncViewModel.create(context)
     }
     val uiState by viewModel.uiState.collectAsState()
     val deviceInfo by viewModel.deviceInfo.collectAsState()
+    // H.I.B Home: every computer counts the same. The Remote and Clipboard tabs, the media player and the
+    // Home cards appear when *any* computer is connected, not only the one on the legacy primary connection.
+    val hubDesktops by DesktopHub.desktops.collectAsState()
+    val anyComputer = uiState.isConnected || hubDesktops.any { it.isConnected }
+    val anyComputerState = rememberUpdatedState(anyComputer)
+    val snackbarHostState = remember { SnackbarHostState() }
+    var showMore by rememberSaveable { mutableStateOf(false) }
     val versionName = try {
         context.packageManager
             .getPackageInfo(context.packageName, 0)
@@ -211,9 +220,37 @@ fun AirSyncMainScreen(
         }
     }
 
-    // Sync volume and mute state with Mac status updates
-    LaunchedEffect(macStatus?.music) {
-        macStatus?.music?.let { music ->
+    // The floating player shows (and controls) the computer you're using, or else whichever one is playing —
+    // any computer, not only the one on the primary connection.
+    val liveByComputer by ComputerLiveStore.live.collectAsState()
+    val mediaComputer = remember(hubDesktops, liveByComputer) {
+        WidgetModels.mediaComputer(
+            hubDesktops.filter { it.isConnected }.map { it.name },
+            liveByComputer,
+            DesktopHub.targetPick()?.id
+        )
+    }
+    val mediaOnPrimary = mediaComputer == null ||
+        DesktopHub.primaryName?.let { com.sameerasw.airsync.multidesk.PairedDesktops.sameName(it, mediaComputer) } == true
+    val mediaLive = ComputerLiveStore.of(mediaComputer)
+    val shownMusic = if (mediaOnPrimary) macStatus?.music else mediaLive?.let { l ->
+        com.sameerasw.airsync.domain.model.MacMusicInfo(
+            isPlaying = l.playing, title = l.title, artist = l.artist,
+            volume = l.volume.coerceAtLeast(0), isMuted = l.muted, albumArt = "", likeStatus = "none"
+        )
+    }
+    val shownArt = if (mediaOnPrimary) albumArtBitmap else remember(mediaLive?.artLite) {
+        mediaLive?.artLite?.let { b64 ->
+            runCatching {
+                val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }.getOrNull()
+        }
+    }
+
+    // Sync volume and mute state with the shown computer's status updates
+    LaunchedEffect(shownMusic) {
+        shownMusic?.let { music ->
             volume = music.volume.toFloat()
             isMuted = music.isMuted
         }
@@ -250,13 +287,36 @@ fun AirSyncMainScreen(
         }
     }
 
-    /** The computer media controls (the floating player): to the point target (SPACE.md §11.1). */
-    fun sendMediaAction(action: String, value: Any? = null) = sendRemoteAction(action, value, pointed = true)
+    /** The floating player's controls go to the computer whose media it shows (else the point target). */
+    fun sendMediaAction(action: String, value: Any? = null) {
+        val to = mediaComputer
+        if (to == null) {
+            sendRemoteAction(action, value, pointed = true)
+            return
+        }
+        HapticUtil.performLightTick(haptics)
+        val data = JSONObject().put("action", action)
+        if (value != null) data.put("value", value)
+        val json = JSONObject().put("type", "remoteControl").put("data", data).toString()
+        if (!DesktopHub.sendTo(to, json)) sendRemoteAction(action, value, pointed = true)
+    }
+
+    /** Clearing the clipboard history is one tap on the FAB, so it comes with Undo. */
+    fun clearHistoryWithUndo() {
+        val before = uiState.clipboardHistory
+        if (before.isEmpty()) return
+        viewModel.clearClipboardHistory()
+        scope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val r = snackbarHostState.showSnackbar("Clipboard history cleared", actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Long)
+            if (r == SnackbarResult.ActionPerformed) viewModel.restoreClipboardHistory(before)
+        }
+    }
 
     val pagerState =
         rememberPagerState(
             initialPage = initialPage,
-            pageCount = { if (uiState.isConnected) 4 else 2 })
+            pageCount = { if (anyComputer) 4 else 2 })
 
     LaunchedEffect(pagerState.currentPage) {
         activeSettingsCategory = null
@@ -297,10 +357,10 @@ fun AirSyncMainScreen(
 
             // Wait up to 2 seconds for initial connection (e.g. auto-reconnect on start)
             withTimeoutOrNull(2000) {
-                snapshotFlow { uiState.isConnected }.filter { it }.first()
+                snapshotFlow { anyComputerState.value }.filter { it }.first()
             }
 
-            if (uiState.isConnected) {
+            if (anyComputerState.value) {
                 val targetPage = when (uiState.defaultTab) {
                     "connect" -> 0
                     "remote" -> 1
@@ -312,7 +372,7 @@ fun AirSyncMainScreen(
 
                     else -> 0
                 }
-                if (targetPage > 0 && targetPage < (if (uiState.isConnected) 4 else 2)) {
+                if (targetPage > 0 && targetPage < (if (anyComputerState.value) 4 else 2)) {
                     pagerState.scrollToPage(targetPage)
                 }
             }
@@ -568,12 +628,58 @@ fun AirSyncMainScreen(
     }
 
 
-    fun disconnect() {
+    /**
+     * Reconnects the computer on the legacy primary connection: the address for this network if known, else
+     * the one discovery sees right now, else its last address. Used by a card's Connect / Resume and by Undo.
+     */
+    fun quickConnectPrimary() {
+        val device = uiState.lastConnectedDevice ?: return
+        val networkAware = viewModel.getNetworkAwareLastConnectedDevice()
+        val seen = viewModel.discoveredDevices.value.firstOrNull {
+            com.sameerasw.airsync.multidesk.PairedDesktops.sameName(it.name, device.name)
+        }
+        when {
+            networkAware != null -> {
+                viewModel.updateIpAddress(networkAware.ipAddress)
+                viewModel.updatePort(networkAware.port)
+                connect(ipAddress = networkAware.ipAddress, port = networkAware.port, symmetricKey = networkAware.symmetricKey)
+            }
+            seen != null -> {
+                viewModel.updateIpAddress(seen.getBestIp())
+                viewModel.updatePort(seen.port.toString())
+                connect(deviceId = seen.id, ipAddress = seen.getBestIp(), port = seen.port.toString(), symmetricKey = device.symmetricKey)
+            }
+            else -> {
+                viewModel.updateIpAddress(device.ipAddress)
+                viewModel.updatePort(device.port)
+                viewModel.updateSymmetricKey(device.symmetricKey)
+                connect(ipAddress = device.ipAddress, port = device.port, symmetricKey = device.symmetricKey)
+            }
+        }
+    }
+
+    fun showMessage(text: String) {
         scope.launch {
-            WebSocketUtil.disconnect(context, manual = true)
-            viewModel.setConnectionStatus(isConnected = false, isConnecting = false)
-            viewModel.clearClipboardHistory()
-            viewModel.setResponse("Disconnected")
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(text, withDismissAction = true, duration = SnackbarDuration.Short)
+        }
+    }
+
+    /** After a pause or forget: a snackbar with Undo (reconnect / restore) for a few seconds. */
+    fun showUndo(ticket: UndoTicket) {
+        scope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val r = snackbarHostState.showSnackbar(ticket.message, actionLabel = "Undo", withDismissAction = true, duration = SnackbarDuration.Long)
+            if (r == SnackbarResult.ActionPerformed) {
+                val ok = DeviceActions.undo(
+                    context, ticket,
+                    connectPrimary = { quickConnectPrimary() },
+                    resumeAll = { viewModel.setAppPaused(context, false) }
+                )
+                if (!ok) showMessage("Too late to undo")
+            } else {
+                DeviceActions.dismiss(ticket)
+            }
         }
     }
 
@@ -640,8 +746,8 @@ fun AirSyncMainScreen(
         }
     }
 
-    // Expand FAB on first launch and whenever variant changes (connect <-> disconnect), then collapse after 5s
-    LaunchedEffect(uiState.isConnected) {
+    // Expand FAB on first launch and whenever variant changes, then collapse after 5s
+    LaunchedEffect(anyComputer) {
         fabExpanded = true
         // Give users a hint for a short period, then collapse to icon-only
         delay(5000)
@@ -707,6 +813,28 @@ fun AirSyncMainScreen(
         qrScannerLauncher.launch(scannerIntent)
     }
 
+    // Add computer: a new pairing next to the others (never replaces one).
+    val addComputerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode != android.app.Activity.RESULT_OK) return@rememberLauncherForActivityResult
+        val raw = result.data?.getStringExtra("QR_CODE") ?: return@rememberLauncherForActivityResult
+        val qr = PairingQr.parse(raw)
+        if (qr?.name == null || qr.key == null) {
+            showMessage("That isn't an H.I.B pairing code")
+            return@rememberLauncherForActivityResult
+        }
+        DesktopHub.addFromQr(context, qr)
+        showMessage("Added ${qr.name} — connecting…")
+    }
+
+    /**
+     * Scan a pairing QR code. With no computer on the primary connection yet (or to re-pair that one) the
+     * legacy flow pairs it; otherwise the computer is added next to the others.
+     */
+    fun scanToAdd(primary: Boolean) {
+        if (primary || DesktopHub.primaryName == null) launchScanner(context)
+        else addComputerLauncher.launch(Intent(context, QRScannerActivity::class.java))
+    }
+
 
     fun sendMessage(message: String) {
         scope.launch {
@@ -736,8 +864,8 @@ fun AirSyncMainScreen(
     }
 
     // Define tabs
-    val tabs = remember(uiState.isConnected) {
-        if (uiState.isConnected) {
+    val tabs = remember(anyComputer) {
+        if (anyComputer) {
             listOf(
                 AirSyncTab(R.string.tab_connect, Icons.Rounded.Phonelink, 0),
                 AirSyncTab(R.string.tab_remote, Icons.Rounded.Gamepad, 1),
@@ -833,418 +961,72 @@ fun AirSyncMainScreen(
                                         .fillMaxWidth()
                                 )
 
-                                // H.I.B Space: Play / Flick work with any connected computer, not only the main one.
-                                val hubDesktops by com.sameerasw.airsync.multidesk.DesktopHub.desktops.collectAsState()
-                                val anyComputer = uiState.isConnected || hubDesktops.any { it.isConnected }
+                                // Your devices: every computer is an equal card. Which one rides the legacy
+                                // primary connection is an internal detail and never shows here.
+                                YourDevicesSection(
+                                    appPaused = uiState.isAppPaused,
+                                    onScan = { primary -> scanToAdd(primary) },
+                                    onConnectPrimary = { quickConnectPrimary() },
+                                    onOpenRemote = { scope.launch { pagerState.animateScrollToPage(1) } },
+                                    onPauseAll = { viewModel.setAppPaused(context, true) },
+                                    onResumeAll = { viewModel.setAppPaused(context, false) },
+                                    onUndoable = { showUndo(it) },
+                                    onMessage = { showMessage(it) }
+                                )
 
-                                RoundedCardContainer {
-
-                                    // Rating Prompt Card
-                                    AnimatedVisibility(
-                                        visible = uiState.shouldShowRatingPrompt,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        RateAppCard(
-                                            onDismiss = { viewModel.setRatingCardDismissed() },
-                                            onRate = { viewModel.setAppRated() }
-                                        )
-                                    }
-
-
-                                    // Connection Status Card
-                                    ConnectionStatusCard(
-                                        isConnected = uiState.isConnected,
-                                        isConnecting = uiState.isConnecting,
-                                        onDisconnect = { disconnect() },
-                                        connectedDevice = uiState.lastConnectedDevice,
-                                        lastConnected = uiState.lastConnectedDevice != null,
-                                        uiState = uiState,
-                                        isPaused = uiState.isAppPaused,
-                                        onTogglePause = {
-                                            viewModel.setAppPaused(context, !uiState.isAppPaused)
-                                        }
+                                // Computers on this network that aren't paired yet: pairing needs their QR code.
+                                val discoveredDevices by viewModel.discoveredDevices.collectAsState()
+                                val nearby = discoveredDevices.filter { dd ->
+                                    dd.type != "android" && hubDesktops.none { com.sameerasw.airsync.multidesk.PairedDesktops.sameName(it.name, dd.name) }
+                                }
+                                AnimatedVisibility(
+                                    visible = !uiState.isAppPaused && uiState.isDeviceDiscoveryEnabled && nearby.isNotEmpty(),
+                                    enter = expandVertically() + fadeIn(),
+                                    exit = shrinkVertically() + fadeOut()
+                                ) {
+                                    NearbyComputersCard(
+                                        names = nearby.map { it.name to it.type },
+                                        onAdd = { scanToAdd(com.sameerasw.airsync.multidesk.DesktopHub.primaryName == null) }
                                     )
-
-                                    // H.I.B Space: "Your devices" — every paired computer (Mac + Windows) with its state
-                                    AnimatedVisibility(
-                                        visible = uiState.lastConnectedDevice != null && !uiState.isAppPaused,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        com.sameerasw.airsync.multidesk.ComputersCard()
-                                    }
-
-                                    // Remote Functions Card (Lock Screen, etc.)
-                                    AnimatedVisibility(
-                                        visible = uiState.isConnected,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        RemoteFunctionsCard(
-                                            onRemoteAction = { sendRemoteAction(it) }
-                                        )
-                                    }
-
-                                    // H.I.B: Play on… (phone audio through one computer's speakers)
-                                    AnimatedVisibility(
-                                        visible = anyComputer,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        com.sameerasw.airsync.presentation.ui.components.cards.PlayOnCard()
-                                    }
-
-                                    // H.I.B: Scenes the Mac marked "Show on phone"
-                                    AnimatedVisibility(
-                                        visible = uiState.isConnected,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        com.sameerasw.airsync.scenes.ScenesCard()
-                                    }
-
-                                    // H.I.B: Do Not Disturb access prompt (hidden once granted)
-                                    AnimatedVisibility(
-                                        visible = uiState.isConnected,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        com.sameerasw.airsync.scenes.DndAccessPrompt()
-                                    }
-
-                                    // H.I.B: Flick (pick photos/videos, throw them at a computer)
-                                    AnimatedVisibility(
-                                        visible = anyComputer,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        com.sameerasw.airsync.presentation.ui.components.cards.FlickCard()
-                                    }
-
-                                    // H.I.B: Find my Mac (always visible; works nearby or over the internet)
-                                    com.sameerasw.airsync.findmy.FindMyMacCard()
-
-                                    // H.I.B: Desk Deck (phone on a stand becomes a control deck for the Mac)
-                                    AnimatedVisibility(
-                                        visible = uiState.isConnected,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        com.sameerasw.airsync.deskdeck.DeskDeckCard()
-                                    }
-
                                 }
 
+                                // For the computer you're using: Flick (point to choose), Scenes.
                                 AnimatedVisibility(
-                                    visible = !uiState.isConnected && !uiState.isAppPaused,
+                                    visible = anyComputer,
                                     enter = expandVertically() + fadeIn(),
                                     exit = shrinkVertically() + fadeOut()
                                 ) {
                                     RoundedCardContainer {
-                                    // Nearby Devices (UDP Discovery)
-                                    val discoveredDevices by viewModel.discoveredDevices.collectAsState()
-
-                                    // Last Connected Device Section
-                                    AnimatedVisibility(
-                                        visible = !uiState.isConnected && uiState.lastConnectedDevice != null,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        uiState.lastConnectedDevice?.let { device ->
-                                            LastConnectedDeviceCard(
-                                                device = device,
-                                                onQuickConnect = {
-                                                    // Check if we can use network-aware connection first
-                                                    val networkAwareDevice =
-                                                        viewModel.getNetworkAwareLastConnectedDevice()
-                                                    if (networkAwareDevice != null) {
-                                                        // Use network-aware device IP for current network
-                                                        viewModel.updateIpAddress(networkAwareDevice.ipAddress)
-                                                        viewModel.updatePort(networkAwareDevice.port)
-                                                        connect(
-                                                            ipAddress = networkAwareDevice.ipAddress,
-                                                            port = networkAwareDevice.port,
-                                                            symmetricKey = networkAwareDevice.symmetricKey
-                                                        )
-                                                    } else {
-                                                        // Fallback to legacy stored device
-                                                        viewModel.updateIpAddress(device.ipAddress)
-                                                        viewModel.updatePort(device.port)
-                                                        viewModel.updateSymmetricKey(device.symmetricKey)
-                                                        connect(
-                                                            ipAddress = device.ipAddress,
-                                                            port = device.port,
-                                                            symmetricKey = device.symmetricKey
-                                                        )
-                                                    }
-                                                }
-                                            )
-                                        }
-                                    }
-
-                                    AnimatedVisibility(
-                                        visible = !uiState.isConnected,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = MaterialTheme.shapes.extraSmall,
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceBright
-                                            )
-                                        ) {
-                                            Column(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(16.dp)
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(bottom = 12.dp),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        text = stringResource(R.string.label_device_discovery),
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-
-                                                    Switch(
-                                                        checked = uiState.isDeviceDiscoveryEnabled,
-                                                        onCheckedChange = { enabled ->
-                                                            HapticUtil.performClick(haptics)
-                                                            viewModel.setDeviceDiscoveryEnabled(
-                                                                context,
-                                                                enabled
-                                                            )
-                                                        },
-                                                        thumbContent = if (uiState.isDeviceDiscoveryEnabled) {
-                                                            {
-                                                                Icon(
-                                                                    painter = painterResource(R.drawable.rounded_android_wifi_3_bar_24),
-                                                                    contentDescription = null,
-                                                                    modifier = Modifier.size(
-                                                                        SwitchDefaults.IconSize
-                                                                    ),
-                                                                )
-                                                            }
-                                                        } else null
-                                                    )
-                                                }
-
-                                                AnimatedVisibility(
-                                                    visible = uiState.isDeviceDiscoveryEnabled,
-                                                    enter = expandVertically() + fadeIn(),
-                                                    exit = shrinkVertically() + fadeOut()
-                                                ) {
-                                                    Column {
-                                                        if (discoveredDevices.isEmpty()) {
-                                                            Row(
-                                                                verticalAlignment = Alignment.CenterVertically,
-                                                                horizontalArrangement = Arrangement.spacedBy(
-                                                                    4.dp
-                                                                )
-                                                            ) {
-                                                                LoadingIndicator()
-
-                                                                Text(
-                                                                    text = "Scanning...",
-                                                                    style = MaterialTheme.typography.bodyMedium,
-                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                                    modifier = Modifier.padding(
-                                                                        vertical = 8.dp
-                                                                    )
-                                                                )
-                                                            }
-                                                        }
-
-                                                        discoveredDevices.forEachIndexed { index, device ->
-                                                            if (index > 0) {
-                                                                Spacer(modifier = Modifier.height(8.dp))
-                                                            }
-
-                                                            Row(
-                                                                modifier = Modifier
-                                                                    .fillMaxWidth()
-                                                                    .clip(MaterialTheme.shapes.medium)
-                                                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                                                    .clickable {
-                                                                        HapticUtil.performClick(
-                                                                            haptics
-                                                                        )
-                                                                        val bestIp = device.getBestIp()
-                                                                        val devicePort = device.port.toString()
-                                                                        val deviceName = device.name
-                                                                        
-                                                                        viewModel.updateIpAddress(bestIp)
-                                                                        viewModel.updatePort(devicePort)
-                                                                        viewModel.updateManualPcName(deviceName)
-                                                                        
-                                                                        val savedKey = viewModel.getSymmetricKeyForDevice(deviceName)
-                                                                        if (savedKey != null) {
-                                                                            viewModel.updateSymmetricKey(savedKey)
-                                                                        }
-                                                                        
-                                                                        connect(
-                                                                            deviceId = device.id,
-                                                                            ipAddress = bestIp,
-                                                                            port = devicePort,
-                                                                            symmetricKey = savedKey ?: uiState.symmetricKey
-                                                                        )
-                                                                    }
-                                                                    .padding(
-                                                                        horizontal = 16.dp,
-                                                                        vertical = 12.dp
-                                                                    ),
-                                                                verticalAlignment = Alignment.CenterVertically
-                                                            ) {
-                                                                Icon(
-                                                                    painter = painterResource(R.drawable.apple),
-                                                                    contentDescription = null,
-                                                                    tint = MaterialTheme.colorScheme.primary
-                                                                )
-                                                                Spacer(modifier = Modifier.width(12.dp))
-                                                                Column {
-                                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                                        Text(
-                                                                            text = device.name,
-                                                                            style = MaterialTheme.typography.bodyLarge
-                                                                        )
-                                                                        Spacer(
-                                                                            modifier = Modifier.width(
-                                                                                8.dp
-                                                                            )
-                                                                        )
-                                                                        if (device.hasLocalIp()) {
-                                                                            Icon(
-                                                                                painter = painterResource(
-                                                                                    R.drawable.rounded_android_wifi_3_bar_24
-                                                                                ),
-                                                                                contentDescription = "Wi-Fi",
-                                                                                modifier = Modifier.size(
-                                                                                    14.dp
-                                                                                ),
-                                                                                tint = MaterialTheme.colorScheme.primary
-                                                                            )
-                                                                        }
-                                                                        if (device.hasTailscaleIp()) {
-                                                                            if (device.hasLocalIp()) Spacer(
-                                                                                modifier = Modifier.width(
-                                                                                    4.dp
-                                                                                )
-                                                                            )
-                                                                            Icon(
-                                                                                painter = painterResource(
-                                                                                    R.drawable.rounded_network_node_24
-                                                                                ),
-                                                                                contentDescription = "Tailscale",
-                                                                                modifier = Modifier.size(
-                                                                                    14.dp
-                                                                                ),
-                                                                                tint = MaterialTheme.colorScheme.secondary
-                                                                            )
-                                                                        }
-                                                                    }
-                                                                    Row(
-                                                                        verticalAlignment = Alignment.CenterVertically,
-                                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                                    ) {
-                                                                        Text(
-                                                                            text = "${device.getBestIp()}:${device.port}",
-                                                                            style = MaterialTheme.typography.bodySmall,
-                                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                                        )
-                                                                        Box(
-                                                                            modifier = Modifier
-                                                                                .clip(RoundedCornerShape(4.dp))
-                                                                                .background(
-                                                                                    if (device.discoverySource == DiscoverySource.MDNS)
-                                                                                        MaterialTheme.colorScheme.primaryContainer
-                                                                                    else
-                                                                                        MaterialTheme.colorScheme.secondaryContainer
-                                                                                )
-                                                                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                                                                        ) {
-                                                                            Text(
-                                                                                text = if (device.discoverySource == DiscoverySource.MDNS) "mDNS" else "UDP",
-                                                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                                                                color = if (device.discoverySource == DiscoverySource.MDNS)
-                                                                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                                                                else
-                                                                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                                                            )
-                                                                        }
-                                                                    }
-                                                                }
-                                                                Spacer(modifier = Modifier.weight(1f))
-                                                                if (uiState.isConnecting && uiState.connectingDeviceId == device.id) {
-                                                                    CircularWavyProgressIndicator(
-                                                                        modifier = Modifier.size(20.dp)
-                                                                    )
-                                                                } else {
-                                                                    Icon(
-                                                                        Icons.AutoMirrored.Filled.ArrowForward,
-                                                                        contentDescription = "Connect",
-                                                                        modifier = Modifier.size(20.dp),
-                                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                                                    )
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
+                                        // H.I.B: Flick (pick photos/videos/files, point at a screen and throw)
+                                        com.sameerasw.airsync.presentation.ui.components.cards.FlickCard()
+                                        // H.I.B: Scenes the computers marked "Show on phone"
+                                        com.sameerasw.airsync.scenes.ScenesCard()
+                                        // H.I.B: Do Not Disturb access prompt (hidden once granted)
+                                        com.sameerasw.airsync.scenes.DndAccessPrompt()
                                     }
                                 }
-                            }
 
-                                AnimatedVisibility(
-                                    visible = !uiState.isAppPaused,
-                                    enter = expandVertically() + fadeIn(),
-                                    exit = shrinkVertically() + fadeOut()
-                                ) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        ListExpandToggleButton(
-                                            isExpanded = showConfigureLastDevice,
-                                            onToggle = { showConfigureLastDevice = !showConfigureLastDevice },
-                                            title = R.string.action_configure,
-                                            iconRes = R.drawable.rounded_settings_24
-                                        )
-
-                                        AnimatedVisibility(
-                                            visible = showConfigureLastDevice,
-                                            enter = expandVertically() + fadeIn(),
-                                            exit = shrinkVertically() + fadeOut()
-                                        ) {
-                                            RoundedCardContainer {
-                                                IconToggleItem(
-                                                    iconRes = R.drawable.rounded_sync_desktop_24,
-                                                    title = stringResource(R.string.setting_auto_reconnect_title),
-                                                    description = stringResource(R.string.setting_auto_reconnect_desc),
-                                                    isChecked = uiState.isAutoReconnectEnabled,
-                                                    onCheckedChange = { enabled ->
-                                                        viewModel.setAutoReconnectEnabled(enabled)
-                                                    }
-                                                )
-
-                                                IconToggleItem(
-                                                    iconRes = R.drawable.rounded_bluetooth_24,
-                                                    title = stringResource(R.string.setting_nearby_connection_title),
-                                                    description = stringResource(R.string.setting_nearby_connection_desc),
-                                                    isChecked = bleSyncEnabled,
-                                                    onCheckedChange = { enabled ->
-                                                        scope.launch {
-                                                            dataStoreManager.setBleSyncEnabled(enabled)
-                                                            dataStoreManager.setBleAutoConnectEnabled(enabled)
-                                                        }
-                                                    }
-                                                )
-                                            }
+                                // More: the rarely used things, one tap away instead of always on screen.
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    ListExpandToggleButton(
+                                        isExpanded = showMore,
+                                        onToggle = { showMore = !showMore },
+                                        title = "More",
+                                        description = "Desk Deck, Find my computer, widgets",
+                                        iconRes = R.drawable.rounded_settings_24
+                                    )
+                                    AnimatedVisibility(
+                                        visible = showMore,
+                                        enter = expandVertically() + fadeIn(),
+                                        exit = shrinkVertically() + fadeOut()
+                                    ) {
+                                        RoundedCardContainer {
+                                            // H.I.B: Desk Deck for a phone on a stand (follows the computer you point at)
+                                            if (anyComputer) com.sameerasw.airsync.deskdeck.DeskDeckCard()
+                                            // H.I.B: Find my computer (nearby or over the internet)
+                                            com.sameerasw.airsync.findmy.FindMyMacCard()
+                                            // H.I.B: home-screen widgets
+                                            com.sameerasw.airsync.widget.WidgetsCard()
                                         }
                                     }
                                 }
@@ -1254,7 +1036,7 @@ fun AirSyncMainScreen(
                         }
 
                         1 -> {
-                            if (uiState.isConnected) {
+                            if (anyComputer) {
                                 // When connected: page 1 = Remote
                                 RemoteControlScreen(
                                     modifier = Modifier
@@ -1299,7 +1081,7 @@ fun AirSyncMainScreen(
                         }
 
                         2 -> {
-                            if (uiState.isConnected) {
+                            if (anyComputer) {
                                 // When connected: page 2 = Clipboard
                                 ClipboardScreen(
                                     clipboardHistory = uiState.clipboardHistory,
@@ -1368,6 +1150,9 @@ fun AirSyncMainScreen(
 //                    .padding(bottom = 16.dp)
                         .zIndex(2f)
                 ) {
+                  Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Undo after a pause / forget, and short confirmations, sit just above the bars.
+                    SnackbarHost(snackbarHostState, modifier = Modifier.padding(horizontal = 8.dp))
                     if (isLandscape) {
                         Row(
                             modifier = Modifier
@@ -1380,14 +1165,14 @@ fun AirSyncMainScreen(
                             verticalAlignment = Alignment.Bottom
                         ) {
                             AnimatedVisibility(
-                                visible = uiState.isConnected,
+                                visible = anyComputer,
                                 enter = fadeIn() + expandHorizontally(),
                                 exit = fadeOut() + shrinkHorizontally(),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 FloatingMediaPlayer(
-                                    musicInfo = macStatus?.music,
-                                    albumArtBitmap = albumArtBitmap,
+                                    musicInfo = shownMusic,
+                                    albumArtBitmap = shownArt,
                                     volume = volume,
                                     isMuted = isMuted,
                                     onVolumeChange = {
@@ -1427,9 +1212,8 @@ fun AirSyncMainScreen(
                                         onAction = { action ->
                                             when (action) {
                                                 "keyboard" -> showKeyboard = !showKeyboard
-                                                "clear_history" -> viewModel.clearClipboardHistory()
-                                                "disconnect" -> disconnect()
-                                                "scan" -> launchScanner(context)
+                                                "clear_history" -> clearHistoryWithUndo()
+                                                "scan" -> scanToAdd(DesktopHub.primaryName == null)
                                                 "back" -> activeSettingsCategory = null
                                                 "resume" -> viewModel.setAppPaused(context, false)
                                             }
@@ -1446,13 +1230,13 @@ fun AirSyncMainScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             AnimatedVisibility(
-                                visible = uiState.isConnected,
+                                visible = anyComputer,
                                 enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
                                 exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom),
                             ) {
                                 FloatingMediaPlayer(
-                                    musicInfo = macStatus?.music,
-                                    albumArtBitmap = albumArtBitmap,
+                                    musicInfo = shownMusic,
+                                    albumArtBitmap = shownArt,
                                     volume = volume,
                                     isMuted = isMuted,
                                     onVolumeChange = {
@@ -1492,9 +1276,8 @@ fun AirSyncMainScreen(
                                         onAction = { action ->
                                             when (action) {
                                                 "keyboard" -> showKeyboard = !showKeyboard
-                                                "clear_history" -> viewModel.clearClipboardHistory()
-                                                "disconnect" -> disconnect()
-                                                "scan" -> launchScanner(context)
+                                                "clear_history" -> clearHistoryWithUndo()
+                                                "scan" -> scanToAdd(DesktopHub.primaryName == null)
                                                 "back" -> activeSettingsCategory = null
                                                 "resume" -> viewModel.setAppPaused(context, false)
                                             }
@@ -1504,6 +1287,7 @@ fun AirSyncMainScreen(
                             )
                         }
                     }
+                  }
                 }
             }
         }
@@ -1595,13 +1379,8 @@ private fun MainFAB(
                     R.string.tab_remote -> onAction("keyboard")
                     R.string.tab_clipboard -> onAction("clear_history")
                     else -> {
-                        if (isConnected) {
-                            onAction("disconnect")
-                        } else if (isAppPaused) {
-                            onAction("resume")
-                        } else {
-                            onAction("scan")
-                        }
+                        // Home: never a one-tap disconnect. Paused → Resume; else → Add computer.
+                        if (isAppPaused) onAction("resume") else onAction("scan")
                     }
                 }
             }
@@ -1620,12 +1399,10 @@ private fun MainFAB(
                 }
 
                 else -> {
-                    if (isConnected) {
-                        Icon(imageVector = Icons.Filled.LinkOff, contentDescription = "Disconnect")
-                    } else if (isAppPaused) {
+                    if (isAppPaused) {
                         Icon(painter = painterResource(R.drawable.rounded_play_arrow_24), contentDescription = stringResource(R.string.resume))
                     } else {
-                        Icon(imageVector = Icons.Filled.QrCodeScanner, contentDescription = "Scan QR")
+                        Icon(imageVector = Icons.Filled.QrCodeScanner, contentDescription = "Add computer")
                     }
                 }
             }

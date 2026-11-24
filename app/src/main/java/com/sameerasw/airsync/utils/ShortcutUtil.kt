@@ -19,6 +19,7 @@ object ShortcutUtil {
     const val SHORTCUT_ID_LOCK = "shortcut_lock"
     const val SHORTCUT_ID_REMOTE = "shortcut_remote"
     const val SHORTCUT_ID_DISCONNECT = "shortcut_disconnect"
+    const val SHORTCUT_ID_DESK_DECK = "shortcut_desk_deck"
     const val SHORTCUT_ID_PAUSE = "shortcut_pause"
     const val SHORTCUT_ID_RESUME = "shortcut_resume"
     const val SHORTCUT_ID_SHARE_MAC = "shortcut_share_mac"
@@ -146,20 +147,17 @@ object ShortcutUtil {
                     .build()
             )
 
-            // 4. Disconnect
+            // 4. Desk Deck (was "Disconnect": a one-tap disconnect from the launcher is too easy to hit by
+            // accident; pausing a computer now lives in its ⋯ menu on Home, with a confirmation and Undo)
             shortcuts.add(
-                ShortcutInfoCompat.Builder(context, SHORTCUT_ID_DISCONNECT)
-                    .setShortLabel("Disconnect")
-                    .setLongLabel("Disconnect")
-                    .setIcon(
-                        IconCompat.createWithResource(
-                            context,
-                            R.drawable.rounded_mimo_disconnect_24
-                        )
-                    )
-                    .setIntent(Intent(context, ClipboardActionActivity::class.java).apply {
-                        action = DASH_ACTION_DISCONNECT
-                    })
+                ShortcutInfoCompat.Builder(context, SHORTCUT_ID_DESK_DECK)
+                    .setShortLabel("Desk Deck")
+                    .setLongLabel("Desk Deck")
+                    .setIcon(IconCompat.createWithResource(context, R.drawable.hib_wic_deck))
+                    .setIntent(
+                        Intent(context, com.sameerasw.airsync.deskdeck.DeskDeckActivity::class.java).apply {
+                            action = Intent.ACTION_VIEW
+                        })
                     .build()
             )
         }

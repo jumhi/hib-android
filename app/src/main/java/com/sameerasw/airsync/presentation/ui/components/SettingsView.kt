@@ -214,12 +214,43 @@ fun SettingsView(
                 )
             }
 
-            // Connection Section
+            // Connection Section (Home's old "Configure" toggles and the discovery switch live here now)
             SettingsCategory(title = "Connection") {
                 DeviceInfoCard(
                     deviceName = uiState.deviceNameInput,
                     localIp = deviceInfo.localIp,
                     onDeviceNameChange = { viewModel.updateDeviceName(it) }
+                )
+
+                IconToggleItem(
+                    iconRes = R.drawable.rounded_sync_desktop_24,
+                    title = stringResource(R.string.setting_auto_reconnect_title),
+                    description = stringResource(R.string.setting_auto_reconnect_desc),
+                    isChecked = uiState.isAutoReconnectEnabled,
+                    onCheckedChange = { enabled -> viewModel.setAutoReconnectEnabled(enabled) }
+                )
+
+                val connectionStore = remember { com.sameerasw.airsync.data.local.DataStoreManager.getInstance(context) }
+                val bleSyncEnabled by connectionStore.getBleSyncEnabled().collectAsState(initial = false)
+                IconToggleItem(
+                    iconRes = R.drawable.rounded_bluetooth_24,
+                    title = stringResource(R.string.setting_nearby_connection_title),
+                    description = stringResource(R.string.setting_nearby_connection_desc),
+                    isChecked = bleSyncEnabled,
+                    onCheckedChange = { enabled ->
+                        scope.launch {
+                            connectionStore.setBleSyncEnabled(enabled)
+                            connectionStore.setBleAutoConnectEnabled(enabled)
+                        }
+                    }
+                )
+
+                IconToggleItem(
+                    iconRes = R.drawable.rounded_android_wifi_3_bar_24,
+                    title = "Find computers nearby",
+                    description = "Shows unpaired computers on this Wi-Fi on Home",
+                    isChecked = uiState.isDeviceDiscoveryEnabled,
+                    onCheckedChange = { enabled -> viewModel.setDeviceDiscoveryEnabled(context, enabled) }
                 )
 
                 ExpandNetworkingCard(context)
@@ -319,13 +350,13 @@ fun SettingsView(
                 )
 
                 IconToggleItem(
-                    title = "Widget",
-                    description = "Home screen widget customization",
+                    title = "Widgets",
+                    description = "Devices, Media, Desk Deck, Clipboard and more",
                     iconRes = R.drawable.rounded_web_24,
                     showToggle = false,
                     onClick = {
                         HapticUtil.performClick(haptics)
-                        onCategoryChange("Widget")
+                        onCategoryChange("Widgets")
                     }
                 )
             }
@@ -645,9 +676,10 @@ fun SettingsView(
                                 )
                             }
                         }
-                        "Widget" -> {
+                        "Widgets" -> {
+                            com.sameerasw.airsync.widget.WidgetsCard()
                             com.sameerasw.airsync.presentation.ui.components.sliders.ConfigSliderItem(
-                                title = "Widget Transparency",
+                                title = "Widget background",
                                 value = uiState.widgetTransparency,
                                 onValueChange = { viewModel.setWidgetTransparency(it) }
                             )

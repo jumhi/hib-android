@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="hib_widget_surface">#141924</color>
+    <color name="hib_widget_on_surface">#E3E7F0</color>
+    <color name="hib_widget_on_surface_variant">#A9B1C1</color>
+    <color name="hib_widget_container">#252C3B</color>
+    <color name="hib_widget_on_container">#DDE3EF</color>
+    <color name="hib_widget_accent">#5FD5EE</color>
+    <color name="hib_widget_on_accent">#00363F</color>
+    <color name="hib_widget_accent_container">#004E5C</color>
+    <color name="hib_widget_on_accent_container">#B5ECF8</color>
+    <color name="hib_widget_dot_in_use">#BAFF38</color>
+    <color name="hib_widget_dot_connected">#4ADE6B</color>
+    <color name="hib_widget_dot_busy">#FFB300</color>
+    <color name="hib_widget_dot_off">#6F7787</color>
+    <color name="hib_widget_dot_alert">#FF6B5E</color>
+</resources>

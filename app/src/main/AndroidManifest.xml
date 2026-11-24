@@ -253,7 +253,7 @@
         </activity>
 
         <!-- Permissions Activity -->
-        <!-- H.I.B: Desk Deck (full-screen control deck for the Mac) -->
+        <!-- H.I.B: Desk Deck (full-screen control deck for your computers) -->
         <activity
             android:name=".deskdeck.DeskDeckActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
@@ -370,11 +370,11 @@
             </intent-filter>
         </receiver>
 
-        <!-- Widget Provider -->
+        <!-- Widget Provider ("Computer in use") -->
         <receiver
             android:name=".widget.AirSyncWidgetProvider"
             android:exported="true"
-            android:label="@string/widget_description">
+            android:label="@string/hib_widget_status_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -382,6 +382,73 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_airsync_info" />
         </receiver>
+
+        <!-- ===== H.I.B Home redesign: widgets (Devices, Media & Play on, Desk Deck, Clipboard) ===== -->
+        <!-- Exported so launchers list them; their button broadcasts carry a per-install token. -->
+        <receiver
+            android:name=".widget.DevicesWidgetProvider"
+            android:exported="true"
+            android:label="@string/hib_widget_devices_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_hib_devices_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.MediaWidgetProvider"
+            android:exported="true"
+            android:label="@string/hib_widget_media_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_hib_media_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.DeckWidgetProvider"
+            android:exported="true"
+            android:label="@string/hib_widget_deck_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_hib_deck_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.ClipboardWidgetProvider"
+            android:exported="true"
+            android:label="@string/hib_widget_clipboard_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_hib_clipboard_info" />
+        </receiver>
+        <!-- Picks the Desk Deck widget's four buttons (on placement and from the widget's settings). -->
+        <activity
+            android:name=".widget.DeckWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.AirSync">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <!-- Reads / writes the clipboard for the Clipboard widget (Android only allows it in front). -->
+        <activity
+            android:name=".widget.WidgetClipboardActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.AirSync.Transparent" />
+        <!-- ===== end H.I.B Home redesign ===== -->
 
 
         <receiver

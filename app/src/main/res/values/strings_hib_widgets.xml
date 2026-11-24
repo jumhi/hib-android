@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- H.I.B home-screen widgets (kept apart from strings.xml so other work on strings doesn't collide). -->
+<resources>
+    <string name="hib_widget_devices_label">Devices</string>
+    <string name="hib_widget_devices_desc">Every computer with its live status. Tap one for its quick actions.</string>
+    <string name="hib_widget_media_label">Media &amp; Play on</string>
+    <string name="hib_widget_media_desc">What the computer you\'re using is playing, with controls and Play on…</string>
+    <string name="hib_widget_deck_label">Desk Deck</string>
+    <string name="hib_widget_deck_desc">Four Desk Deck buttons for the computer you\'re using. Pick them yourself.</string>
+    <string name="hib_widget_clipboard_label">Clipboard</string>
+    <string name="hib_widget_clipboard_desc">Send your clipboard to the computer you\'re using, or get what it copied.</string>
+    <string name="hib_widget_status_label">Computer in use</string>
+    <string name="hib_widget_status_desc">The computer you\'re using: battery and what\'s playing.</string>
+</resources>

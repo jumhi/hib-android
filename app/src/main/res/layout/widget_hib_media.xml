@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- H.I.B widget. Generated layout: keep ids in sync with the provider. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/hib_widget_clip"
+    android:clipToOutline="true">
+
+    <ImageView
+        android:id="@+id/hw_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:src="@drawable/hib_widget_bg" />
+
+    <LinearLayout
+        android:id="@+id/hw_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="@dimen/hib_widget_padding">
+
+        <LinearLayout
+            android:id="@+id/hw_top"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/hib_widget_art_bg"
+            android:clipToOutline="true">
+
+            <ImageView
+                android:id="@+id/hw_art_icon"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:padding="14dp"
+                android:src="@drawable/hib_wic_music"
+                android:tint="@color/hib_widget_on_container" />
+
+            <ImageView
+                android:id="@+id/hw_art"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="Album art"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+        </FrameLayout>
+
+            <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+            android:id="@+id/hw_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="@color/hib_widget_on_surface"
+            android:textSize="15sp"
+            android:textStyle="bold"
+             />
+
+            <TextView
+            android:id="@+id/hw_sub"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="@color/hib_widget_on_surface_variant"
+            android:textSize="12sp"
+             />
+        </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+            android:id="@+id/hw_playon"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/hib_widget_pill"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp">
+
+            <ImageView
+                android:id="@+id/hw_playon_icon"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/rounded_music_cast_24"
+                android:tint="@color/hib_widget_on_container" />
+
+            <TextView
+            android:id="@+id/hw_playon_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text="Play on…"
+            android:textColor="@color/hib_widget_on_container"
+            android:textSize="12sp"
+            android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+            <ImageView
+            android:id="@+id/hw_prev"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/hib_widget_row"
+            android:contentDescription="Previous"
+            android:padding="8dp"
+            android:src="@drawable/hib_wic_previous"
+            android:tint="@color/hib_widget_on_surface" />
+
+            <ImageView
+            android:id="@+id/hw_play"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/hib_widget_circle_play"
+            android:contentDescription="Play or pause"
+            android:padding="11dp"
+            android:src="@drawable/hib_wic_play"
+            android:tint="@color/hib_widget_on_accent" />
+
+            <ImageView
+            android:id="@+id/hw_next"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/hib_widget_row"
+            android:contentDescription="Next"
+            android:padding="8dp"
+            android:src="@drawable/hib_wic_next"
+            android:tint="@color/hib_widget_on_surface" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

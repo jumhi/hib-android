@@ -163,13 +163,14 @@ object PointTarget {
         FlickAim.stop()
         val sends = synchronized(lock) { session.stop(DesktopHub.connectedIds()) }
         _choice.value = null
+        DesktopHub.onPointTrackingEnded()
         sends.forEach { DesktopHub.sendToComputer(it.computer, it.json()) }
     }
 
     private fun tick(now: Long = System.currentTimeMillis()) {
         if (!settled) return
         val reading = FlickAim.current()?.let { AimMatcher.Aim(it.first, it.second) }
-        val next = PointPick.choose(reading, saved.orEmpty(), FlickPointing.computers(), DesktopHub.candidates())
+        val next = PointPick.choose(reading, saved.orEmpty(), FlickPointing.computers(), DesktopHub.candidates(), DesktopHub.explicitPickId())
         val sends = synchronized(lock) {
             if (!session.active) return
             session.update(next, now)
@@ -212,7 +213,7 @@ class PointPressAim(context: Context) {
         while (compass && FlickAim.current() == null && System.currentTimeMillis() - downAt < PointPress.WAIT_MS) delay(20)
         val reading = FlickAim.current()?.let { AimMatcher.Aim(it.first, it.second) }
         cancel()
-        val choice = PointPick.choose(reading, PointTarget.savedMap(app), FlickPointing.computers(), DesktopHub.candidates())
+        val choice = PointPick.choose(reading, PointTarget.savedMap(app), FlickPointing.computers(), DesktopHub.candidates(), DesktopHub.explicitPickId())
         PointTarget.glowOnce(choice, label)
         return choice
     }

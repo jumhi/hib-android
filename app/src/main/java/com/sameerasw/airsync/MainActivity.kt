@@ -416,6 +416,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // H.I.B: a computer tapped in the Devices widget opens its quick actions on Home.
+        com.sameerasw.airsync.home.HomeFocus.fromIntent(intent)
+
         setContent {
             val viewModel: com.sameerasw.airsync.presentation.viewmodel.AirSyncViewModel =
                 androidx.lifecycle.viewmodel.compose.viewModel {
@@ -599,6 +602,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        com.sameerasw.airsync.home.HomeFocus.fromIntent(intent)
         if (com.sameerasw.airsync.service.PlayOnComputerTileService.isTilePreferences(intent)) {
             startActivity(com.sameerasw.airsync.presentation.ui.activities.PlayOnChooserActivity.intent(this))
             return

@@ -36,15 +36,18 @@ object PointPick {
      *
      * @param computers the connected computers with their screens (as for Point & Flick)
      * @param candidates the same computers as target-rule candidates
+     * @param explicit the computer the user picked on purpose on its Home card ([ExplicitPick]); it beats
+     *   pointing, as in the target rule
      */
     fun choose(
         aim: AimMatcher.Aim?,
         saved: List<SavedScreenAim>,
         computers: List<ScreenComputer>,
-        candidates: List<TargetRule.Candidate>
+        candidates: List<TargetRule.Candidate>,
+        explicit: String? = null
     ): PointChoice? {
         val hit = ScreenMap.nearest(aim, saved, computers)
-        val pick = TargetRule.pick(candidates, aimed = hit?.computer) ?: return null
+        val pick = TargetRule.pick(candidates, explicit = explicit, aimed = hit?.computer) ?: return null
         val screen = hit?.takeIf { pick.reason == TargetRule.Reason.AIM && PairedDesktops.sameName(it.computer, pick.id) }
         return PointChoice(pick.id, pick.reason, screen)
     }

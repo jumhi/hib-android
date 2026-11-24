@@ -278,13 +278,34 @@ object DesktopHub {
         return name
     }
 
+    /** The saved pairing for [name], if any (kept by Home so Forget can be undone). */
+    fun pairedRecord(name: String): PairedDesktop? = PairedDesktops.find(paired, name)
+
+    /**
+     * Forgets [name]: disconnects it and removes its pairing. When it rides the primary connection its
+     * last-device record goes too, so it can't reconnect by itself. Every other computer stays paired.
+     */
     fun remove(context: Context, name: String) {
+        if (explicitPickId()?.let { PairedDesktops.sameName(it, name) } == true) synchronized(explicitPick) { explicitPick.clear() }
         scope.launch {
+            val ds = DataStoreManager.getInstance(context)
             if (primaryName != null && PairedDesktops.sameName(name, primaryName!!)) {
+                WebSocketUtil.stopAutoReconnect(context)
                 WebSocketUtil.disconnect(context, manual = true)
+                ds.clearLastConnectedDevice()
             }
-            DataStoreManager.getInstance(context).updatePairedDesktopsJson { json ->
+            ds.updatePairedDesktopsJson { json ->
                 PairedDesktopCodec.encode(PairedDesktops.remove(PairedDesktopCodec.decode(json), name))
+            }
+        }
+    }
+
+    /** Undo for Forget: the pairing comes back as it was. */
+    fun restorePairing(context: Context, record: PairedDesktop) {
+        start(context)
+        scope.launch {
+            DataStoreManager.getInstance(context).updatePairedDesktopsJson { json ->
+                PairedDesktopCodec.encode(PairedDesktops.upsert(PairedDesktopCodec.decode(json), record))
             }
         }
     }
@@ -405,6 +426,9 @@ object DesktopHub {
                 return
             }
         }
+        // H.I.B Home: every computer's own battery / now playing and its copied text, primary or not.
+        if (type == "status") ComputerLiveStore.onStatus(link.name, json)
+        else if (type == "clipboardUpdate") ComputerLiveStore.onClipboard(link.name, json)
         val previous = source.get()
         source.set(link)
         if (DesktopRouting.countsAsRequest(type)) {
@@ -425,8 +449,9 @@ object DesktopHub {
                     IncomingFlicks.onFlickStart(context, link, data)
                 }
                 !isPrimary && (type == "macInfo" || type == "status" || type == "macVolume") -> {
-                    // A secondary computer's own media/volume state isn't shown on the phone (the main
-                    // screen is about the primary); its macInfo was already consumed by the session.
+                    // A secondary computer's status went to [ComputerLiveStore] above (Home cards, widgets);
+                    // the legacy single-computer handlers stay about the primary. Its macInfo was already
+                    // consumed by the session.
                 }
                 !isPrimary && type == "disconnectRequest" -> {
                     Log.d(TAG, "${link.name} asked the phone to disconnect")
@@ -759,7 +784,28 @@ object DesktopHub {
 
     /** Where Flick / Play / Send go when nothing else is said (SPACE.md §1.4). Null when nothing is connected. */
     fun targetPick(explicit: String? = null, aimed: String? = null): TargetRule.Pick? =
-        TargetRule.pick(candidates(), explicit, aimed)
+        TargetRule.pick(candidates(), explicit ?: explicitPickId(), aimed)
+
+    // MARK: - explicit pick (a Home card's "Desk Deck", "Remote", "Flick" on that computer)
+
+    private val explicitPick = ExplicitPick()
+
+    /** The user picked [name] on its Home card: it is the target until they move on (SPACE.md §1.4 explicit). */
+    fun pickComputer(name: String) {
+        synchronized(explicitPick) { explicitPick.set(name, System.currentTimeMillis()) }
+        noteUsed(name)
+    }
+
+    /** The picked computer while it still counts (and is connected), else null. */
+    fun explicitPickId(): String? {
+        // Read these outside the pick's lock: PointTarget may be holding its own lock while it asks.
+        val tracking = PointTarget.isTracking
+        val connected = connectedIds()
+        return synchronized(explicitPick) { explicitPick.current(System.currentTimeMillis(), tracking, connected) }
+    }
+
+    /** The last point-aware screen closed: the pick lasts a little longer, then the usual rule decides. */
+    fun onPointTrackingEnded() = synchronized(explicitPick) { explicitPick.onTrackingEnded(System.currentTimeMillis()) }
 
     fun connectedIds(): List<String> = desktops.value.filter { it.isConnected }.map { it.name }
 
