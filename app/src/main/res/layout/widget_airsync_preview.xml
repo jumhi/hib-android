@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- H.I.B widget. Generated layout: keep ids in sync with the provider. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@android:id/background"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/hib_widget_clip"
-    android:clipToOutline="true">
+    android:clipToOutline="true"
+    tools:ignore="UseAppTint,UnusedAttribute,HardcodedText,NestedWeights,DisableBaselineAlignment,UseCompoundDrawables,RtlSymmetry">
+    <!-- android:tint is right here: widgets are drawn by the launcher, without AppCompat. -->
 
     <ImageView
         android:id="@+id/hw_bg"

@@ -1013,7 +1013,7 @@ fun AirSyncMainScreen(
                                         onToggle = { showMore = !showMore },
                                         title = "More",
                                         description = "Desk Deck, Find my computer, widgets",
-                                        iconRes = R.drawable.rounded_settings_24
+                                        iconRes = R.drawable.rounded_extension_24
                                     )
                                     AnimatedVisibility(
                                         visible = showMore,
