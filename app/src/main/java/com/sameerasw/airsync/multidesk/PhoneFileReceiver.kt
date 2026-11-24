@@ -166,7 +166,19 @@ object PhoneFileReceiver {
             from.send(JSONObject().put("type", "transferVerified")
                 .put("data", JSONObject().put("id", id).put("verified", ok)).toString())
             IncomingFlicks.forget(state.flickId)
-            showDone(context, state, ok, uri, picture, meta?.from ?: state.senderName)
+            // A file of a bundle (SPACE.md §14): the bundle shows one notification for all of them.
+            val flickId = state.flickId
+            val bundled = flickId != null && runCatching {
+                IncomingFlicks.bundleFinished(
+                    context, flickId, ok && uri != null,
+                    uri?.let { IncomingFlicks.shareableUri(context, it) }, picture
+                )
+            }.getOrDefault(false)
+            if (bundled) {
+                runCatching { NotificationManagerCompat.from(context).cancel(state.notifId) }
+            } else {
+                showDone(context, state, ok, uri, picture, meta?.from ?: state.senderName)
+            }
         }.start()
     }
 
@@ -177,6 +189,8 @@ object PhoneFileReceiver {
         state.file.delete()
         IncomingFlicks.forget(state.flickId)
         runCatching { NotificationManagerCompat.from(context).cancel(state.notifId) }
+        val flickId = state.flickId
+        if (flickId != null && IncomingFlicks.bundleFinished(context, flickId, false, null, null)) return true
         toast(context, "${state.senderName} cancelled ${state.name}")
         return true
     }
@@ -189,6 +203,7 @@ object PhoneFileReceiver {
             s.file.delete()
             runCatching { NotificationManagerCompat.from(context).cancel(s.notifId) }
         }
+        runCatching { IncomingFlicks.senderGone(context, desktopId) }
     }
 
     /** Cancel from the phone's notification. */
@@ -227,6 +242,12 @@ object PhoneFileReceiver {
 
     @SuppressLint("MissingPermission")
     private fun notifyProgress(context: Context, s: Incoming, force: Boolean) {
+        // Files of a bundle share one progress notification (SPACE.md §14).
+        val flickId = s.flickId
+        if (flickId != null && IncomingFlicks.inBundle(flickId)) {
+            IncomingFlicks.bundleProgress(context, flickId, s.received)
+            return
+        }
         val now = System.currentTimeMillis()
         if (!force && now - s.lastNotify < 700) return
         s.lastNotify = now

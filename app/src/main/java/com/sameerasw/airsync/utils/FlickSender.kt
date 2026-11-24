@@ -13,8 +13,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
@@ -32,20 +38,48 @@ import java.util.concurrent.ConcurrentHashMap
  *    init with `flickId` so the computer can drive the flying card's progress ring.
  *
  * Files are streamed in 64 KB chunks with a bounded in-flight window, so memory stays flat for any size.
+ *
+ * Bundles (SPACE.md §14): every item's `flickStart` goes out at the throw (tagged `bundle`), then the files
+ * wait in one queue and stream [MAX_PARALLEL] at a time. Streaming them all at once over the one socket
+ * is what broke multi-sends: a dozen windows of chunks queued behind each other, acks came back later than
+ * the fixed 2.5 s retransmit timer, every stream re-sent its whole window, and the socket's 16 MB send
+ * queue overflowed (OkHttp then closes the link) — so nothing arrived. Now a chunk is only re-sent when its
+ * stream has had no ack at all for [STALL_MS] (the link is TCP; a slow ack is not a lost chunk).
  */
 object FlickSender {
     private const val TAG = "FlickSender"
     private const val CHUNK_SIZE = 64 * 1024
     private const val WINDOW = 12
     private const val ACK_TIMEOUT_MS = 2500L
+    /** No ack at all for this long → re-send the oldest unacked chunks. */
+    private const val STALL_MS = 8000L
     private const val MAX_ATTEMPTS = 4
-    const val MAX_TEXT_CHARS = 100_000
+    /** Files streamed at the same time; the rest of a bundle waits its turn. */
+    private const val MAX_PARALLEL = 2
+    private const val KEEP_FINISHED_MS = 2 * 60 * 1000L
+    const val MAX_TEXT_CHARS = FlickWire.MAX_TEXT_CHARS
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val ackChannels = ConcurrentHashMap<String, Channel<Int>>()
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    private val _landed = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    private val queue = Semaphore(MAX_PARALLEL)
+
+    private val _transfers = MutableStateFlow<Map<String, FlickTransfer>>(emptyMap())
+    /** Every file stream Flick started recently (by flick id): queued, sending (bytes acked), done or failed. */
+    val transfers: StateFlow<Map<String, FlickTransfer>> = _transfers.asStateFlow()
+
+    private fun setTransfer(id: String, change: (FlickTransfer?) -> FlickTransfer?) {
+        _transfers.update { map ->
+            val now = System.currentTimeMillis()
+            val next = change(map[id])
+            val kept = map.filterValues { !it.finished || now - it.at < KEEP_FINISHED_MS }.toMutableMap()
+            if (next == null) kept.remove(id) else kept[id] = next.copy(at = now)
+            kept
+        }
+    }
+
+    private val _landed = MutableSharedFlow<String>(extraBufferCapacity = 64)
     /** Emits a flick id when the computer reports that card has landed (`flickLanded`). */
     val landed: SharedFlow<String> = _landed
 
@@ -102,36 +136,23 @@ object FlickSender {
         text: String?,
         to: String? = target,
         /** The screen the phone points at (SPACE.md §7.4); null or "" lets the computer choose. */
-        screen: String? = null
+        screen: String? = null,
+        /** Set for every item of a bundle thrown together (SPACE.md §14). */
+        bundle: FlickBundle? = null
     ): Boolean {
-        val data = JSONObject().apply {
-            put("id", id)
-            put("kind", kind)
-            put("name", name)
-            put("mime", mime)
-            put("size", size)
-            put("exitXRatio", exitXRatio.toDouble())
-            put("velocity", velocity.toDouble())
-            put("angle", angle.toDouble())
-            if (!thumbnailBase64.isNullOrEmpty()) put("thumbnail", thumbnailBase64)
-            if (text != null) put("text", text.take(MAX_TEXT_CHARS))
-            if (!screen.isNullOrEmpty()) put("screen", screen)
-            // Where the phone is pointing, for computers that don't know `screen` yet.
-            FlickAim.current()?.let { (heading, elevation) ->
-                put("heading", heading.toDouble())
-                put("elevation", elevation.toDouble())
-            }
-        }
-        val msg = JSONObject().apply {
-            put("type", "flickStart")
-            put("data", data)
-        }
-        return send(to, msg.toString())
+        val msg = FlickWire.flickStart(
+            id = id, kind = kind, name = name, mime = mime, size = size,
+            exitXRatio = exitXRatio, velocity = velocity, angle = angle,
+            thumbnailBase64 = thumbnailBase64, text = text, screen = screen,
+            aim = FlickAim.current(), bundle = bundle
+        )
+        return send(to, msg)
     }
 
     /**
-     * Opens [uri] right away (so the share grant can't lapse once the overlay closes), then streams it
-     * to the computer in the background. Suspends only until the stream is open; returns false if it can't be read.
+     * Opens [uri] right away (so the share grant can't lapse once the overlay closes), then queues it and
+     * streams it to the computer in the background. Suspends only until the stream is open; returns false
+     * if it can't be read. Progress shows in [transfers].
      */
     suspend fun startFileTransfer(context: Context, flickId: String, uri: Uri, name: String, mime: String, tagKey: String = "flickId", to: String? = target): Boolean =
         withContext(Dispatchers.IO) {
@@ -153,20 +174,34 @@ object FlickSender {
             } catch (e: Exception) {
                 Log.e(TAG, "Can't open $uri: ${e.message}")
                 null
-            }) ?: return@withContext false
+            }) ?: run {
+                setTransfer(flickId) { FlickTransfer(flickId, size, state = FlickTransfer.State.FAILED) }
+                return@withContext false
+            }
 
+            setTransfer(flickId) { FlickTransfer(flickId, size, state = FlickTransfer.State.QUEUED) }
             scope.launch {
                 val ok = try {
-                    input.use { streamFile(flickId, it, name, mime, size, tagKey, to) }
+                    queue.withPermit {
+                        setTransfer(flickId) { FlickTransfer(flickId, size, state = FlickTransfer.State.SENDING) }
+                        input.use { streamFile(flickId, it, name, mime, size, tagKey, to) }
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Flick transfer failed: ${e.message}")
                     false
                 } finally {
+                    runCatching { input.close() }
                     tempFile?.delete()
+                }
+                setTransfer(flickId) {
+                    (it ?: FlickTransfer(flickId, size)).copy(
+                        sent = if (ok) size else it?.sent ?: 0L,
+                        state = if (ok) FlickTransfer.State.DONE else FlickTransfer.State.FAILED
+                    )
                 }
                 if (!ok) {
                     sendCancel(flickId, to)
-                    toast(appContext, "Flick: couldn't send $name" + (to?.let { " to $it" } ?: ""))
+                    reportFailure(appContext, name, to)
                 }
             }
             true
@@ -197,6 +232,8 @@ object FlickSender {
             val buffer = ByteArray(CHUNK_SIZE)
             var nextIndex = 0
             var acked = 0
+            var lastAckAt = System.currentTimeMillis()
+            var lastReported = -1
 
             while (acked < totalChunks) {
                 // Fill the window.
@@ -220,17 +257,31 @@ object FlickSender {
                 // Wait for an ack (or time out and retransmit the oldest stragglers).
                 val index = withTimeoutOrNull(ACK_TIMEOUT_MS) { acks.receive() }
                 if (index != null) {
-                    if (inFlight.remove(index) != null) acked++
+                    lastAckAt = System.currentTimeMillis()
+                    if (inFlight.remove(index) != null) {
+                        acked++
+                        // Progress for the Flick screen, in whole-percent steps.
+                        val pct = (acked * 100L / totalChunks.coerceAtLeast(1)).toInt()
+                        if (pct != lastReported) {
+                            lastReported = pct
+                            val sentBytes = (acked.toLong() * CHUNK_SIZE).coerceAtMost(size)
+                            setTransfer(id) { (it ?: FlickTransfer(id, size)).copy(sent = sentBytes, state = FlickTransfer.State.SENDING) }
+                        }
+                    }
                     continue
                 }
                 if (!targetReady(to)) return false
+                // Acks are slow but still coming: the link is busy, not lossy (it's TCP). Only a stream
+                // that has heard nothing for STALL_MS re-sends its oldest chunks.
                 val now = System.currentTimeMillis()
+                if (now - lastAckAt < STALL_MS) continue
                 for ((idx, entry) in inFlight.entries.toList()) {
-                    if (now - entry.third < ACK_TIMEOUT_MS) continue
+                    if (now - entry.third < STALL_MS) continue
                     if (entry.second >= MAX_ATTEMPTS) return false
                     send(to, entry.first)
                     inFlight[idx] = Triple(entry.first, entry.second + 1, now)
                 }
+                lastAckAt = now
             }
 
             val complete = JSONObject().apply {
@@ -291,7 +342,25 @@ object FlickSender {
         return -1
     }
 
-    private fun toast(context: Context, text: String) {
-        mainHandler.post { Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    private val failures = mutableListOf<Pair<String, String?>>()
+    private var failureToastPending = false
+
+    /** One toast for the files that couldn't go in the same moment (a lost link fails a whole bundle). */
+    private fun reportFailure(context: Context, name: String, to: String?) {
+        synchronized(failures) {
+            failures += name to to
+            if (failureToastPending) return
+            failureToastPending = true
+        }
+        mainHandler.postDelayed({
+            val list = synchronized(failures) {
+                failureToastPending = false
+                failures.toList().also { failures.clear() }
+            }
+            if (list.isEmpty()) return@postDelayed
+            val where = list.mapNotNull { it.second }.distinct().singleOrNull()?.let { " to $it" } ?: ""
+            val what = if (list.size == 1) list.first().first else "${list.size} files"
+            Toast.makeText(context, "Flick: couldn't send $what$where", Toast.LENGTH_SHORT).show()
+        }, 900)
     }
 }

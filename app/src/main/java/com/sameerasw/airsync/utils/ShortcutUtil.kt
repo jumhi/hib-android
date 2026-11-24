@@ -162,8 +162,8 @@ object ShortcutUtil {
             )
         }
 
-        // Set dynamic shortcuts (replaces existing ones)
-        ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts)
+        // Set dynamic shortcuts (replaces existing ones). H.I.B: Flick's share shortcut always stays.
+        ShortcutManagerCompat.setDynamicShortcuts(context, FlickShortcuts.withFlick(context, shortcuts))
     }
 
 

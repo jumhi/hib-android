@@ -25,6 +25,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import com.sameerasw.airsync.R
 import com.sameerasw.airsync.utils.ClipboardSyncManager
+import com.sameerasw.airsync.utils.FlickBundle
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
@@ -38,6 +39,9 @@ import kotlin.math.max
  * with Open, and for files the metadata (who sent it, thumbnail) waits here until [PhoneFileReceiver]
  * finishes the transfer tagged with the same `flickId`; then the phone posts a heads-up
  * "Flick from <from>" with a preview, Open and Share.
+ *
+ * Bundles (SPACE.md §14): files tagged `bundle` are gathered by [bundles] and shown as ONE notification,
+ * "5 photos from <from>" with a preview strip, that opens [FlickBundleActivity] with all of them.
  */
 object IncomingFlicks {
     private const val TAG = "IncomingFlicks"
@@ -52,29 +56,49 @@ object IncomingFlicks {
         val from: String,
         val fromPlatform: String,
         val thumbnail: String?,
-        val at: Long
+        val at: Long,
+        val bundle: FlickBundle? = null
     )
 
     private val metas = ConcurrentHashMap<String, Meta>()
+    /** Bundles on their way in (pure bookkeeping, see [BundleCollector]). */
+    val bundles = BundleCollector()
+    /** Small previews of bundle items that arrived, for the notification's strip (by flick id). */
+    private val bundleThumbs = ConcurrentHashMap<String, Bitmap>()
+
+    /** The `bundle` tag of a `flickStart`, when it has a usable one. */
+    fun parseBundle(data: JSONObject): FlickBundle? {
+        val b = data.optJSONObject("bundle") ?: return null
+        return FlickBundle.from(b.optString("id"), b.optInt("index", -1), b.optInt("count", 0))
+    }
 
     fun onFlickStart(context: Context, link: DesktopLink, data: JSONObject) {
         val id = data.optString("id").ifBlank { UUID.randomUUID().toString() }
         val kind = data.optString("kind").ifBlank { "file" }
         val from = data.optString("from").ifBlank { link.name }
+        val bundle = parseBundle(data)
         when (kind) {
             "text" -> {
+                bundle?.let { bundles.onNonFile(it, from) }
                 val text = data.optString("text")
                 if (text.isEmpty()) return
                 ClipboardSyncManager.handleClipboardUpdate(context, text)
                 FlickNotifications.showText(context, from, text)
             }
             "link" -> {
+                bundle?.let { bundles.onNonFile(it, from) }
                 val url = data.optString("text").ifBlank { data.optString("url") }.trim()
                 if (url.isEmpty()) return
                 FlickNotifications.showLink(context, from, url)
             }
             else -> {
                 prune()
+                if (bundle != null) {
+                    bundles.onStart(
+                        bundle, from, id, kind, data.optString("name"),
+                        data.optString("mime"), data.optLong("size", 0L)
+                    )
+                }
                 metas[id] = Meta(
                     id = id,
                     kind = kind,
@@ -84,14 +108,47 @@ object IncomingFlicks {
                     from = from,
                     fromPlatform = data.optString("fromPlatform").ifBlank { link.platform },
                     thumbnail = data.optString("thumbnail").ifBlank { null },
-                    at = System.currentTimeMillis()
+                    at = System.currentTimeMillis(),
+                    bundle = bundle
                 )
-                Log.d(TAG, "Flick ($kind) coming from $from")
+                Log.d(TAG, "Flick ($kind) coming from $from" + (bundle?.let { " (${it.index + 1} of ${it.count})" } ?: ""))
             }
         }
     }
 
     fun meta(id: String?): Meta? = id?.let { metas[it] }
+
+    /** True when [flickId] is part of a bundle coming in (its notifications are the bundle's). */
+    fun inBundle(flickId: String?): Boolean = bundles.bundleOf(flickId) != null
+
+    /** Bytes of a bundle item arrived: one progress notification for the whole bundle. */
+    fun bundleProgress(context: Context, flickId: String, received: Long) {
+        val snap = bundles.onProgress(flickId, received) ?: return
+        BundleNotifications.progress(context, snap)
+    }
+
+    /**
+     * A bundle item finished ([ok] = saved at [uri]). When it was the last one, the bundle's notification
+     * goes up with every item; returns true when the bundle took care of the notification.
+     */
+    fun bundleFinished(context: Context, flickId: String, ok: Boolean, uri: Uri?, picture: Bitmap?): Boolean {
+        if (!inBundle(flickId)) return false
+        if (ok && picture != null) bundleThumbs[flickId] = BundleNotifications.shrink(picture)
+        val snap = bundles.onFinished(flickId, ok, uri?.toString()) ?: return false
+        if (snap.complete) finishBundle(context, snap) else BundleNotifications.progress(context, snap)
+        return true
+    }
+
+    /** A computer went away: show what arrived of its unfinished bundles. */
+    fun senderGone(context: Context, name: String) {
+        bundles.abandon(name).forEach { finishBundle(context, it) }
+    }
+
+    private fun finishBundle(context: Context, snap: BundleCollector.Snapshot) {
+        if (!bundles.claim(snap.bundleId)) return
+        val thumbs = snap.items.map { bundleThumbs.remove(it.flickId) }
+        BundleNotifications.done(context, snap, thumbs)
+    }
 
     fun forget(id: String?) {
         if (id != null) metas.remove(id)
@@ -175,6 +232,8 @@ object IncomingFlicks {
 /** Notifications for things computers flick to the phone. */
 object FlickNotifications {
     const val CHANNEL_ID = "hib_flick_incoming"
+
+    fun ensure(context: Context) = ensureChannel(context)
 
     private fun ensureChannel(context: Context) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

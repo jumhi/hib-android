@@ -159,6 +159,7 @@
             android:name=".presentation.ui.activities.FlickActivity"
             android:excludeFromRecents="true"
             android:exported="true"
+            android:icon="@drawable/ic_flick_shortcut"
             android:label="@string/flick_to_mac_label"
             android:taskAffinity=""
             android:theme="@style/Theme.AirSync.Transparent">
@@ -521,7 +522,63 @@
             android:name=".approval.ApprovalDenyReceiver"
             android:exported="false" />
 
+        <!-- ===== H.I.B Flick: bundles, gallery entry points (begin) =====
+             Bundle viewer for files a computer flicked together, the photo-access ask, the Flick widget
+             (latest photos; tap or select several) with its new-photo watcher, and the Flick tile.
+             Photo permissions for the widget and tile are just below </application>. -->
+        <activity
+            android:name=".multidesk.FlickBundleActivity"
+            android:autoRemoveFromRecents="true"
+            android:exported="false"
+            android:label="@string/flick_to_mac_label"
+            android:taskAffinity=""
+            android:theme="@style/Theme.AirSync" />
+
+        <activity
+            android:name=".presentation.ui.activities.FlickMediaAccessActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.AirSync.Transparent" />
+
+        <receiver
+            android:name=".widget.FlickWidgetProvider"
+            android:exported="true"
+            android:label="@string/flick_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_flick_info" />
+        </receiver>
+
+        <service
+            android:name=".widget.FlickWidgetMediaJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <service
+            android:name=".service.FlickTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_flick_24"
+            android:label="@string/flick_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <!-- ===== H.I.B Flick (end) ===== -->
+
     </application>
+
+    <!-- ===== H.I.B Flick: photo access for the Flick widget and tile (asked on the widget's first tap) ===== -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
 
     <queries>
