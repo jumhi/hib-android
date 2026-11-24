@@ -471,7 +471,7 @@ fun DeviceCard(
             Spacer(Modifier.height(12.dp))
             Box(Modifier.padding(end = 12.dp)) {
                 when {
-                    card.quickActions.isNotEmpty() -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    card.quickActions.isNotEmpty() -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         card.quickActions.forEach { a ->
                             QuickActionButton(
                                 label = quickLabel(a, card),
