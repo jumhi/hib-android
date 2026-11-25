@@ -252,6 +252,18 @@ object RemoteInput {
         addProperty("button", button); addProperty("isDown", down)
     }
 
+    /** SPACE.md §15.5: put the cursor at fractions of a display ("" = main). */
+    fun moveAbs(x: Float, y: Float, display: String): String = RemoteJson.remoteControl("mouse_move_abs") {
+        addProperty("x", kotlin.math.round(x.toDouble() * 100_000.0) / 100_000.0)
+        addProperty("y", kotlin.math.round(y.toDouble() * 100_000.0) / 100_000.0)
+        addProperty("display", display)
+    }
+
+    /** SPACE.md §15.5: press or release one key (macOS keycode); it stays held until released. */
+    fun hold(keycode: Int, down: Boolean): String = RemoteJson.remoteControl("key") {
+        addProperty("keycode", keycode); addProperty("isDown", down)
+    }
+
     fun type(text: String): String = RemoteJson.remoteControl("type") { addProperty("text", text) }
 
     fun key(keycode: Int, modifiers: List<String> = emptyList()): String = RemoteJson.remoteControl("keypress") {
