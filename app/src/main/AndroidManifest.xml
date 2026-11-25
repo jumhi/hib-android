@@ -518,6 +518,14 @@
             android:taskAffinity=""
             android:theme="@style/Theme.AirSync.Transparent" />
 
+        <!-- H.I.B Phone Remote: unlock a computer / allow unlocking it (BiometricPrompt + Keystore signature) -->
+        <activity
+            android:name=".remote.RemoteUnlockActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.AirSync.Transparent" />
+
         <receiver
             android:name=".approval.ApprovalDenyReceiver"
             android:exported="false" />

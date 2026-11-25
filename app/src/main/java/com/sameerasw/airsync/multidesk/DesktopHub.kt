@@ -364,6 +364,23 @@ object DesktopHub {
         return link.isReady() && link.send(json)
     }
 
+    /** Where a connected computer's link lives (Phone Remote's `/screen` dials the same address and key). */
+    data class LinkEndpoint(val ip: String?, val port: Int, val key: String)
+
+    fun linkEndpoint(name: String): LinkEndpoint? {
+        val link = findLink(name) ?: return null
+        if (!link.isReady()) return null
+        return when (link) {
+            PrimaryLink -> {
+                val key = WebSocketUtil.currentKeyString ?: return null
+                val ip = WebSocketUtil.currentIpAddress?.takeIf { !it.contains(",") }
+                LinkEndpoint(ip, WebSocketUtil.currentPortValue ?: 6996, key)
+            }
+            is DesktopSession -> LinkEndpoint(link.connectedIp, link.desktop.port, link.desktop.key)
+            else -> null
+        }
+    }
+
     /** Point & Flick: asks every connected computer for its screens (`screensRequest`, SPACE.md §7.3). */
     fun requestScreens() {
         val msg = PointJson.screensRequest()
@@ -444,6 +461,9 @@ object DesktopHub {
                 type == "screensInfo" -> onScreensInfo(link, json)
                 // Both the primary and the other computers (SPACE.md §8.2); the reply goes to [link] only.
                 type == AdbSetupJson.REQUEST -> AdbSetupMonitor.onRequest(context, link, json)
+                // Phone Remote (SPACE.md §15.1): from the primary and the other computers alike.
+                type != null && type in com.sameerasw.airsync.remote.RemoteJson.INBOUND ->
+                    com.sameerasw.airsync.remote.RemoteHub.onInbound(context, link, type, json)
                 type == "flickStart" -> {
                     val data = runCatching { JSONObject(json).optJSONObject("data") }.getOrNull() ?: JSONObject()
                     IncomingFlicks.onFlickStart(context, link, data)
@@ -631,6 +651,7 @@ object DesktopHub {
     fun onSessionChanged(session: DesktopSession) {
         val ctx = appContext
         if (ctx != null && !session.isReady()) {
+            com.sameerasw.airsync.remote.RemoteHub.onDisconnected(session.name)
             cleanupFor(ctx, session.id)
             activity.remove(PairedDesktops.normalizeName(session.name))
             forgetScreens(session.name)

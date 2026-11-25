@@ -1041,13 +1041,12 @@ fun AirSyncMainScreen(
                                 RemoteControlScreen(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .padding(
-                                            top = statusBarHeight,
-                                            bottom = if (isLandscape) 100.dp else 180.dp
-                                        ),
+                                        .padding(top = statusBarHeight),
                                     showKeyboard = showKeyboard,
                                     onDismissKeyboard = { showKeyboard = false },
-                                    isActive = pagerState.currentPage == 1
+                                    isActive = pagerState.currentPage == 1,
+                                    bottomPadding = if (isLandscape) 100.dp else 180.dp,
+                                    onLeave = { scope.launch { pagerState.animateScrollToPage(0) } }
                                 )
                             } else {
                                 // When disconnected: page 1 = Settings

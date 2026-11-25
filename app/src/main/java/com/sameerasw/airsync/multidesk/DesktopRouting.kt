@@ -54,7 +54,9 @@ object DesktopRouting {
         "screenFrame", "screenShareState", "phoneAudioState", "findMacRingState", "sceneRunResult",
         "deckActionResult", "desktopsList", "desktopActivity", "flickStart", "screensInfo",
         // Renewed every few minutes while a computer's "Set up mirroring" card is open: not a user request.
-        "adbSetupRequest"
+        "adbSetupRequest",
+        // Phone Remote (SPACE.md §15.1): state pushes and answers, not requests.
+        "remoteHello", "remoteLockState", "remoteFocus", "unlockChallenge", "unlockResult", "unlockEnrollResult"
     )
 
     const val REQUESTER_WINDOW_MS = 30_000L

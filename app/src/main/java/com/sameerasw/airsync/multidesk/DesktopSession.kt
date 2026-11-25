@@ -193,8 +193,13 @@ class DesktopSession(
 
     /** Tries every known IP in parallel; the first socket to open wins. Suspends until macInfo or failure. */
     private suspend fun attempt(): Boolean {
-        val ips = PairedDesktops.mergeIps(extraIps, desktop.ips)
+        val lan = PairedDesktops.mergeIps(extraIps, desktop.ips)
         extraIps = emptyList()
+        // Phone Remote (SPACE.md §15.1): remembered Tailscale addresses join 1 s after the LAN ones.
+        val dials = com.sameerasw.airsync.remote.TailscaleAddrs.plan(
+            lan, com.sameerasw.airsync.remote.RemoteAddrStore.get(appContext, desktop.name)
+        )
+        val ips = dials.map { it.ip }
         if (ips.isEmpty() || key == null) return false
         state = State.CONNECTING
         DesktopHub.onSessionChanged(this)
@@ -203,12 +208,12 @@ class DesktopSession(
         val failures = java.util.concurrent.atomic.AtomicInteger(0)
         val won = AtomicBoolean(false)
 
-        ips.forEach { ip ->
+        fun dial(ip: String) {
             val host = if (ip.contains(":")) "[${ip.substringBefore("%").removeSurrounding("[", "]")}]" else ip
             val request = runCatching { Request.Builder().url("ws://$host:${desktop.port}/socket").build() }.getOrNull()
             if (request == null) {
                 if (failures.incrementAndGet() >= ips.size) result.complete(false)
-                return@forEach
+                return
             }
             client.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -283,6 +288,15 @@ class DesktopSession(
                     }
                 }
             })
+        }
+
+        dials.forEach { d ->
+            if (d.delayMs <= 0L) dial(d.ip)
+            else scope.launch {
+                delay(d.delayMs)
+                if (won.get() || result.isCompleted) return@launch
+                dial(d.ip)
+            }
         }
 
         val ok = withTimeoutOrNull(ATTEMPT_TIMEOUT_MS) { result.await() } ?: false

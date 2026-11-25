@@ -146,8 +146,16 @@ object WebSocketUtil {
         // Validate local network IP
         CoroutineScope(Dispatchers.IO).launch {
             // Handle multiple IPs if provided (comma-separated)
-            val ipList =
+            val lanList =
                 ipAddress.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+            // H.I.B Phone Remote (SPACE.md §15.1): this computer's remembered Tailscale addresses join 1 s later.
+            val dials = com.sameerasw.airsync.remote.TailscaleAddrs.plan(
+                lanList,
+                com.sameerasw.airsync.multidesk.DesktopHub.primaryName
+                    ?.let { com.sameerasw.airsync.remote.RemoteAddrStore.get(context, it) }.orEmpty()
+            )
+            val ipList = dials.map { it.ip }
+            val dialDelay = dials.associate { it.ip to it.delayMs }
 
             if (ipList.isEmpty()) {
                 Log.e(TAG, "No valid IP addresses provided")
@@ -245,6 +253,7 @@ object WebSocketUtil {
                     Log.d(TAG, "Attempting connection to $url")
 
                     CoroutineScope(Dispatchers.IO).launch {
+                        dialDelay[ip]?.takeIf { it > 0 }?.let { delay(it) }
                         if (isConnected.get() || connectionStarted.get()) return@launch
 
                         val request = Request.Builder()
