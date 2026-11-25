@@ -58,7 +58,10 @@ object DeviceActions {
     }
 
     /** The Remote tab acts on this computer. */
-    fun pickForRemote(computer: String) = DesktopHub.pickComputer(computer)
+    fun pickForRemote(computer: String) {
+        DesktopHub.pickComputer(computer)
+        com.sameerasw.airsync.remote.RemoteHub.select(computer)
+    }
 
     /** Play here: the phone's audio on this computer, or stop when it already plays here. */
     fun togglePlay(computer: String): Boolean {
