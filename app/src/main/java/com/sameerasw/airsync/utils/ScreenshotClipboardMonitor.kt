@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.first
  */
 object ScreenshotClipboardMonitor {
     private const val TAG = "HIBScreenshotClipboard"
-    private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024 // stays under OkHttp's 16 MiB queue after base64 + encryption
+    private const val MAX_IMAGE_BYTES = 8_000_000L // SPACE.md §16.2; stays under OkHttp's 16 MiB queue after base64 + encryption
 
     private val running = AtomicBoolean(false)
     private var observer: ContentObserver? = null
@@ -102,15 +102,8 @@ object ScreenshotClipboardMonitor {
 
                 val uri = Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id.toString())
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
-                val payload = JSONObject()
-                    .put("type", "clipboardImageUpdate")
-                    .put("data", JSONObject()
-                        .put("base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
-                        .put("mime", mime)
-                        .put("name", name)
-                    )
-                    .toString()
-                if (WebSocketUtil.sendMessage(payload)) {
+                // Through the one clipboard component: it gets an id/ts/origin and catch-up (SPACE.md §16).
+                if (ClipboardSyncManager.sendScreenshot(bytes, mime, name)) {
                     Log.d(TAG, "Screenshot placed on Mac clipboard: $name")
                 }
             }

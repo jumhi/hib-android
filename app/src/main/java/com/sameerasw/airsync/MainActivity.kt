@@ -637,6 +637,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // SPACE.md §16.3: with focus Android lets H.I.B read the clipboard — a copy made in another app
+        // while H.I.B was in the background is sent now (and the log reader can ask for log access).
+        if (hasFocus) com.sameerasw.airsync.utils.ClipboardSyncManager.onAppFocused(this)
+    }
+
     override fun onResume() {
         super.onResume()
         if (PermissionUtil.isLocalNetworkPermissionGranted(this)) {

@@ -37,6 +37,12 @@
 
     <!-- Media playback control  -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- H.I.B clipboard (SPACE.md §16.3): copies made in other apps while H.I.B is in the background.
+         Both are granted over ADB by the computer: pm grant … READ_LOGS, appops set … SYSTEM_ALERT_WINDOW allow. -->
+    <uses-permission
+        android:name="android.permission.READ_LOGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- H.I.B Find My: let the Mac locate this phone (also in the background) -->

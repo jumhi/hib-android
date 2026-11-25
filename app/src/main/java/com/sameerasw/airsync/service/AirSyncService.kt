@@ -331,6 +331,13 @@ class AirSyncService : Service() {
         val disconnectPendingIntent =
             PendingIntent.getBroadcast(this, 1, disconnectIntent, PendingIntent.FLAG_IMMUTABLE)
 
+        // SPACE.md §16.3: "Send clipboard" opens a tiny window that has focus, so Android lets it read.
+        val sendClipIntent = Intent(
+            this, com.sameerasw.airsync.presentation.ui.activities.ClipboardActionActivity::class.java
+        ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+        val sendClipPendingIntent =
+            PendingIntent.getActivity(this, 2, sendClipIntent, PendingIntent.FLAG_IMMUTABLE)
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_laptop_24)
             .setPriority(NotificationCompat.PRIORITY_MIN)
@@ -359,6 +366,7 @@ class AirSyncService : Service() {
             } ?: ""
 
             builder.setContentText(getString(R.string.connected_to_device, name) + batteryText)
+            builder.addAction(R.drawable.ic_clipboard_24, "Send clipboard", sendClipPendingIntent)
             builder.addAction(
                 R.drawable.rounded_link_off_24,
                 getString(R.string.disconnect),
@@ -367,6 +375,7 @@ class AirSyncService : Service() {
         } else if (com.sameerasw.airsync.data.ble.BleGattServer.isAnyAuthenticated() && lastDevice != null) {
             builder.setContentTitle(getString(R.string.app_name))
             builder.setContentText("Connected to ${lastDevice.name} via Bluetooth")
+            builder.addAction(R.drawable.ic_clipboard_24, "Send clipboard", sendClipPendingIntent)
             builder.addAction(
                 R.drawable.rounded_link_off_24,
                 getString(R.string.disconnect),

@@ -103,7 +103,7 @@ fun ClipboardScreen(
                     else -> null
                 }
                 if (!text.isNullOrBlank()) {
-                    Log.d("ClipboardScreen", "Dropped text: ${text.take(50)}")
+                    Log.d("ClipboardScreen", "Dropped text (${text.length} characters)")
                     onSendText(text)
                     true
                 } else {
