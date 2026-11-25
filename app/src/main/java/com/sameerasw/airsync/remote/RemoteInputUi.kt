@@ -1,26 +1,33 @@
 package com.sameerasw.airsync.remote
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import com.sameerasw.airsync.multidesk.PairedDesktops
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-/** The Remote's ⋯ menu choices (design §6.9), kept on the phone. */
+/** The Remote's choices (design §6.9, SPACE.md §15.5), kept on the phone; mode and custom shortcuts per computer. */
 class RemoteSettings(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("hib_remote", Context.MODE_PRIVATE)
 
     enum class Quality(val label: String) { AUTO("Auto"), SHARPER("Sharper"), SMOOTHER("Smoother") }
+
+    /** SPACE.md §15.5: Touchpad (default) or Direct. */
+    enum class ControlMode { TOUCHPAD, DIRECT }
 
     var pictureOn by mutableStateOf(prefs.getBoolean("picture_on", true))
         private set
@@ -28,14 +35,42 @@ class RemoteSettings(context: Context) {
         private set
     var naturalScroll by mutableStateOf(prefs.getBoolean("natural_scroll", true))
         private set
-    /** 0.6 … 1.6 × the trackpad's usual ×1.8. */
+    /** 0.6 … 1.6 × the touchpad's 1:1 base (acceleration on top). */
     var pointerSpeed by mutableFloatStateOf(prefs.getFloat("pointer_speed", 1f))
         private set
+
+    private val modes = mutableStateMapOf<String, ControlMode>()
+    private val combos = mutableStateMapOf<String, List<CustomCombo>>()
 
     fun changePicture(on: Boolean) { pictureOn = on; prefs.edit().putBoolean("picture_on", on).apply() }
     fun changeQuality(q: Quality) { quality = q; prefs.edit().putString("quality", q.name).apply() }
     fun changeNatural(on: Boolean) { naturalScroll = on; prefs.edit().putBoolean("natural_scroll", on).apply() }
     fun changeSpeed(s: Float) { pointerSpeed = s.coerceIn(0.6f, 1.6f); prefs.edit().putFloat("pointer_speed", pointerSpeed).apply() }
+
+    fun mode(computer: String): ControlMode {
+        val k = PairedDesktops.normalizeName(computer)
+        modes[k]?.let { return it }
+        return runCatching { ControlMode.valueOf(prefs.getString("mode_$k", null) ?: "TOUCHPAD") }
+            .getOrDefault(ControlMode.TOUCHPAD)
+    }
+
+    fun changeMode(computer: String, mode: ControlMode) {
+        val k = PairedDesktops.normalizeName(computer)
+        modes[k] = mode
+        prefs.edit().putString("mode_$k", mode.name).apply()
+    }
+
+    fun customCombos(computer: String): List<CustomCombo> {
+        val k = PairedDesktops.normalizeName(computer)
+        combos[k]?.let { return it }
+        return CustomCombo.decode(prefs.getString("combos_$k", null))
+    }
+
+    fun changeCustomCombos(computer: String, list: List<CustomCombo>) {
+        val k = PairedDesktops.normalizeName(computer)
+        combos[k] = list
+        prefs.edit().putString("combos_$k", CustomCombo.encode(list)).apply()
+    }
 
     /** maxW, maxH, fps for `screenOpen`, from this phone's screen. */
     fun streamSize(context: Context): Triple<Int, Int, Int> {
@@ -51,72 +86,115 @@ class RemoteSettings(context: Context) {
 }
 
 /**
- * Sends the touchpad's actions to one computer: moves and scrolls are summed and sent every 10 ms (100 Hz, as the
- * old trackpad did); clicks and button edges go at once, after any pending move so the order is kept.
+ * Sends pointer and key traffic to one computer (SPACE.md §15.5): moves, absolute moves and scrolls go out at once
+ * when the link is idle and at most every 8 ms (120 Hz) while the finger moves, summed or replaced within a frame
+ * ([InputCoalescer]) so nothing stale is ever queued. Clicks, button edges and keys go at once, after any pending
+ * move so the order is kept. Main thread only.
  */
 class RemoteInputSender(private val scope: CoroutineScope, private val send: (String) -> Unit) {
-    private val lock = Any()
-    private var mx = 0f
-    private var my = 0f
-    private var sx = 0f
-    private var sy = 0f
+    private val coalescer = InputCoalescer(FRAME_MS)
     private var job: Job? = null
 
-    fun start() {
-        if (job?.isActive == true) return
-        job = scope.launch {
-            while (isActive) {
-                delay(10)
-                flush()
-            }
+    private fun now() = SystemClock.uptimeMillis()
+
+    fun move(dx: Float, dy: Float) { if (coalescer.addMove(dx, dy, now())) flush() else schedule() }
+    fun moveAbs(x: Float, y: Float, display: String) { if (coalescer.setAbs(x, y, display, now())) flush() else schedule() }
+    fun scroll(dx: Float, dy: Float) { if (coalescer.addScroll(dx, dy, now())) flush() else schedule() }
+
+    /** A full click; [around] = sticky-modifier `key` downs before and ups after (⌘-click). */
+    fun click(button: String, around: Pair<List<String>, List<String>> = emptyList<String>() to emptyList()) {
+        flush()
+        around.first.forEach(send)
+        send(RemoteInput.button(button, true))
+        scope.launch {
+            delay(CLICK_MS)
+            send(RemoteInput.button(button, false))
+            around.second.forEach(send)
         }
     }
 
-    fun stop() { job?.cancel(); job = null }
+    fun button(button: String, down: Boolean) { flush(); send(RemoteInput.button(button, down)) }
 
-    fun act(a: RemoteAction) {
-        when (a) {
-            is RemoteAction.Move -> synchronized(lock) { mx += a.dx; my += a.dy }
-            is RemoteAction.Scroll -> synchronized(lock) { sx += a.dx; sy += a.dy }
-            is RemoteAction.Click -> {
-                flush()
-                send(RemoteInput.button(a.button, true))
-                scope.launch { delay(50); send(RemoteInput.button(a.button, false)) }
-            }
-            is RemoteAction.Button -> { flush(); RemoteInput.messages(a).forEach(send) }
-            is RemoteAction.Zoom, is RemoteAction.Pan -> {}
-        }
+    /** Any other message (keys, text), in order after pending moves. */
+    fun raw(json: String) { flush(); send(json) }
+    fun raw(list: List<String>) { if (list.isEmpty()) return; flush(); list.forEach(send) }
+
+    /** Drops what is pending without sending it (the computer changed). */
+    fun discard() {
+        job?.cancel()
+        job = null
+        coalescer.drain(now())
     }
 
     fun flush() {
-        val (m, s) = synchronized(lock) {
-            val m = if (mx != 0f || my != 0f) RemoteAction.Move(mx, my) else null
-            val s = if (sx != 0f || sy != 0f) RemoteAction.Scroll(sx, sy) else null
-            mx = 0f; my = 0f; sx = 0f; sy = 0f
-            m to s
+        job?.cancel()
+        job = null
+        coalescer.drain(now()).forEach(send)
+    }
+
+    private fun schedule() {
+        if (job?.isActive == true) return
+        job = scope.launch {
+            delay(coalescer.waitMs(now()).coerceAtLeast(1L))
+            job = null
+            coalescer.drain(now()).forEach(send)
         }
-        m?.let { RemoteInput.messages(it).forEach(send) }
-        s?.let { RemoteInput.messages(it).forEach(send) }
+    }
+
+    companion object {
+        const val FRAME_MS = 8L
+        const val CLICK_MS = 30L
     }
 }
 
-/** Feeds every pointer event over this element to [gestures] and hands the results to [onAction]. */
-fun Modifier.remoteTouchpad(gestures: RemoteGestures, onAction: (RemoteAction) -> Unit): Modifier =
-    pointerInput(gestures) {
-        awaitEachGesture {
-            val first = awaitFirstDown(requireUnconsumed = false)
-            // A gesture cut short last time (view left mid-drag) is closed first.
-            gestures.cancel().forEach(onAction)
-            gestures.onEvent(first.uptimeMillis, listOf(TouchPoint(first.id.value, first.position.x, first.position.y, true)))
-                .forEach(onAction)
-            first.consume()
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Main)
-                val t = event.changes.maxOfOrNull { it.uptimeMillis } ?: 0L
-                val points = event.changes.map { TouchPoint(it.id.value, it.position.x, it.position.y, it.pressed) }
-                gestures.onEvent(t, points).forEach(onAction)
-                event.changes.forEach { it.consume() }
-                if (event.changes.none { it.pressed }) break
+/**
+ * Feeds every pointer event over this element (in dp) to [recogniser] and hands the results to [onAction]. The
+ * recogniser's timers (long-press, double-tap-hold) fire while the fingers rest. [onDown] runs as a gesture
+ * starts (stops a scroll fling).
+ */
+@Composable
+fun Modifier.padInput(
+    key: Any?,
+    recogniser: PointerRecogniser,
+    onDown: () -> Unit = {},
+    onAction: (PadAction) -> Unit
+): Modifier {
+    val action by rememberUpdatedState(onAction)
+    val start by rememberUpdatedState(onDown)
+    return padInputRaw(key, recogniser, { start() }, { action(it) })
+}
+
+private fun Modifier.padInputRaw(
+    key: Any?,
+    recogniser: PointerRecogniser,
+    onDown: () -> Unit,
+    onAction: (PadAction) -> Unit
+): Modifier = pointerInput(key, recogniser) {
+    val d = density
+    awaitEachGesture {
+        val first = awaitFirstDown(requireUnconsumed = false)
+        onDown()
+        // A gesture cut short last time is closed first.
+        recogniser.cancel().forEach(onAction)
+        recogniser.onEvent(first.uptimeMillis, listOf(TouchPoint(first.id.value, first.position.x / d, first.position.y / d, true)))
+            .forEach(onAction)
+        first.consume()
+        var lastT = first.uptimeMillis
+        while (true) {
+            val due = recogniser.nextTimerAt()
+            val event = if (due == null) awaitPointerEvent(PointerEventPass.Main)
+            else withTimeoutOrNull((due - lastT).coerceAtLeast(1L)) { awaitPointerEvent(PointerEventPass.Main) }
+            if (event == null) {
+                recogniser.onTimer(due!!).forEach(onAction)
+                lastT = due
+                continue
             }
+            val t = event.changes.maxOfOrNull { it.uptimeMillis } ?: lastT
+            lastT = t
+            val points = event.changes.map { TouchPoint(it.id.value, it.position.x / d, it.position.y / d, it.pressed) }
+            recogniser.onEvent(t, points).forEach(onAction)
+            event.changes.forEach { it.consume() }
+            if (event.changes.none { it.pressed }) break
         }
     }
+}
