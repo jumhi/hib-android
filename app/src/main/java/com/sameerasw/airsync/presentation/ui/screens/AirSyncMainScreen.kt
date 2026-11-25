@@ -770,10 +770,6 @@ fun AirSyncMainScreen(
 
     LaunchedEffect(Unit) {
         com.sameerasw.airsync.utils.WebSocketMessageHandler.setOnClipboardEntryCallback { text ->
-            Log.d(
-                "AirSyncMainScreen",
-                "Incoming clipboard update via WebSocketMessageHandler: ${text.take(50)}"
-            )
             viewModel.addClipboardEntry(text, isFromPc = true)
         }
     }

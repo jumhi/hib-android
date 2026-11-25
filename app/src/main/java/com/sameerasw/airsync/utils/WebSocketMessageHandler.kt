@@ -132,44 +132,21 @@ object WebSocketMessageHandler {
      * Uses `ClipboardSyncManager` to avoid feedback loops by tracking origin.
      */
     private fun handleClipboardUpdate(context: Context, data: JSONObject?) {
-        try {
-            if (data == null) {
-                Log.e(TAG, "Clipboard update data is null")
-                return
-            }
-
-            val text = data.optString("text")
-            if (!text.isNullOrEmpty()) {
-                Log.d(TAG, "Clipboard update received from desktop: ${text.take(50)}...")
-
-                // Notify ViewModel/UI to add entry to clipboard history
-                onClipboardEntryReceived?.invoke(text)
-
-                // Update system clipboard
-                ClipboardSyncManager.handleClipboardUpdate(context, text)
-                Log.d(TAG, "Clipboard updated from desktop: ${text.take(50)}...")
-            } else {
-                Log.w(TAG, "Clipboard update received but text is empty")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error handling clipboard update: ${e.message}")
-        }
+        // DesktopHub hands clips to ClipboardSyncManager before they get here; this is a fallback.
+        val from = com.sameerasw.airsync.multidesk.DesktopHub.currentSourceId()
+            ?: com.sameerasw.airsync.multidesk.DesktopHub.PrimaryLink.id
+        ClipboardSyncManager.onInboundData(context, from, "clipboardUpdate", data, "phone")
     }
 
     private fun handleClipboardImageUpdate(context: Context, data: JSONObject?) {
-        try {
-            if (data == null) return
-            val encoded = data.optString("base64")
-            if (encoded.isBlank()) return
-            val bytes = Base64.decode(encoded, Base64.DEFAULT)
-            val mime = data.optString("mime", "image/png")
-            val name = data.optString("name", "HIB-Clipboard.png")
-            if (ClipboardUtil.setClipboardImage(context, bytes, mime, name)) {
-                Log.d(TAG, "Universal clipboard image received: $name (${bytes.size} bytes)")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error handling clipboard image update", e)
-        }
+        val from = com.sameerasw.airsync.multidesk.DesktopHub.currentSourceId()
+            ?: com.sameerasw.airsync.multidesk.DesktopHub.PrimaryLink.id
+        ClipboardSyncManager.onInboundData(context, from, "clipboardImageUpdate", data, "phone")
+    }
+
+    /** A computer's text was applied to the phone's clipboard: the history on the main screen. */
+    fun notifyClipboardEntry(text: String) {
+        runCatching { onClipboardEntryReceived?.invoke(text) }
     }
 
     private fun handleScreenFrame(data: JSONObject?) {

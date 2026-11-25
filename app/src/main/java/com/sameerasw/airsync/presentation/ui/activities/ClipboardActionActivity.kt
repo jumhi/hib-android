@@ -210,16 +210,20 @@ private fun ClipboardActionScreen(
                             null
                         }
 
-                        val textToSync = sharedText ?: ClipboardUtil.getClipboardText(context)
+                        // This window has focus, so Android lets H.I.B read the clipboard (text or image).
+                        val sent = if (isShareAction) {
+                            if (!sharedText.isNullOrEmpty()) { ClipboardSyncManager.syncTextToDesktop(sharedText); true } else false
+                        } else {
+                            ClipboardSyncManager.sendClipboardNow(context)
+                        }
 
-                        if (!textToSync.isNullOrEmpty()) {
-                            ClipboardSyncManager.syncTextToDesktop(textToSync)
+                        if (sent) {
                             uiState = ClipboardUiState.Success
                             delay(1200)
                             onFinished()
                         } else {
                             uiState = ClipboardUiState.Error(
-                                if (isShareAction) "Shared text empty" else "Clipboard empty"
+                                if (isShareAction) "Shared text empty" else "Nothing sent"
                             )
                             delay(1500)
                             onFinished()

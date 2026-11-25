@@ -148,7 +148,7 @@ object PhoneFileReceiver {
                         // "Send clipboard" from the Mac: an image goes straight onto the phone's clipboard too.
                         if (state.isClipboard && state.mime.startsWith("image/") && state.size < 20L * 1024 * 1024) {
                             runCatching {
-                                com.sameerasw.airsync.utils.ClipboardUtil.setClipboardImage(
+                                com.sameerasw.airsync.utils.ClipboardSyncManager.writeOwnImage(
                                     context, state.file.readBytes(), state.mime, state.name
                                 )
                             }

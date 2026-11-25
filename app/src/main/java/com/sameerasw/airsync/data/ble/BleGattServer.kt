@@ -448,8 +448,8 @@ class BleGattServer(private val context: Context) {
                     characteristic.uuid,
                     value
                 ) {
-                    Log.d(TAG, "Received clipboard from Mac via BLE: ${it.take(50)}")
-                    ClipboardSyncManager.handleClipboardUpdate(context, it)
+                    Log.d(TAG, "Received clipboard via BLE (${it.length} characters)")
+                    ClipboardSyncManager.onBle(context, it)
                 }
 
                 BleConstants.CHAR_DEVICE_NAME -> handleChunkedWrite(characteristic.uuid, value) {

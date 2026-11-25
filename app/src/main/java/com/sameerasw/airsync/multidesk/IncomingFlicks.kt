@@ -82,7 +82,8 @@ object IncomingFlicks {
                 bundle?.let { bundles.onNonFile(it, from) }
                 val text = data.optString("text")
                 if (text.isEmpty()) return
-                ClipboardSyncManager.handleClipboardUpdate(context, text)
+                // Through the clipboard component: the watcher won't send this write out as a phone copy.
+                ClipboardSyncManager.writeOwnText(context, text)
                 FlickNotifications.showText(context, from, text)
             }
             "link" -> {

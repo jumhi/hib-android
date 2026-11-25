@@ -34,19 +34,30 @@ object ClipboardUtil {
     }
 
     /**
-     * Set text to clipboard
+     * Set text to clipboard. [tag] (a clip id) goes into the description's extras so the sync
+     * watcher knows this write was H.I.B applying a clip, not the user copying (SPACE.md §16.2).
      */
-    fun setClipboardText(context: Context, text: String): Boolean {
+    fun setClipboardText(context: Context, text: String, tag: String? = null): Boolean {
         return try {
             val clipboardManager =
                 context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clipData = ClipData.newPlainText("H.I.B", text)
+            tagClip(clipData, tag)
             clipboardManager.setPrimaryClip(clipData)
-            Log.d(TAG, "Text set to clipboard: ${text.take(50)}...")
+            Log.d(TAG, "Text set to clipboard (${text.length} characters)")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Error setting clipboard text: ${e.message}")
             false
+        }
+    }
+
+    private fun tagClip(clip: ClipData, tag: String?) {
+        if (tag == null) return
+        runCatching {
+            clip.description.extras = android.os.PersistableBundle().apply {
+                putString(com.sameerasw.airsync.clip.ClipReader.TAG_EXTRA, tag)
+            }
         }
     }
 
@@ -71,7 +82,6 @@ object ClipboardUtil {
                     ?.text
                     ?.toString()
                 if (!clipText.isNullOrEmpty()) {
-                    Log.d(TAG, "Clipboard changed: ${clipText.take(50)}...")
                     onClipboardChanged(clipText)
                 }
             } catch (e: Exception) {
@@ -123,7 +133,8 @@ object ClipboardUtil {
         context: Context,
         bytes: ByteArray,
         mimeType: String,
-        fileName: String
+        fileName: String,
+        tag: String? = null
     ): Boolean {
         return try {
             val extension = when (mimeType.lowercase()) {
@@ -147,7 +158,9 @@ object ClipboardUtil {
             )
             val clipboardManager =
                 context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboardManager.setPrimaryClip(ClipData.newUri(context.contentResolver, "H.I.B Screenshot", uri))
+            val clip = ClipData.newUri(context.contentResolver, "H.I.B Screenshot", uri)
+            tagClip(clip, tag)
+            clipboardManager.setPrimaryClip(clip)
             Log.d(TAG, "Image set on universal clipboard: ${bytes.size} bytes")
             true
         } catch (e: Exception) {

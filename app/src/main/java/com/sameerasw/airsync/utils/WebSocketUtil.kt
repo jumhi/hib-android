@@ -701,7 +701,9 @@ object WebSocketUtil {
                 }
 
                 "clipboard", "clipboardUpdate" -> {
+                    // Plain text only (older Macs paste whatever arrives); images don't go over BLE.
                     val content = data.optString("text", data.optString("content"))
+                    if (content.isEmpty()) return false
                     ble.sendChunkedNotification(BleConstants.CHAR_CLIPBOARD_DATA_NOTIFY, content)
                     return true
                 }

@@ -29,6 +29,8 @@ class AirSyncApp : Application() {
 
         // H.I.B multi-desktop: keep sessions to every other paired computer alongside the primary one.
         com.sameerasw.airsync.multidesk.DesktopHub.start(this)
+        // H.I.B clipboard (SPACE.md §16): follows the setting; applies clips from computers.
+        com.sameerasw.airsync.utils.ClipboardSyncManager.init(this)
         // H.I.B widgets follow every computer's live state.
         com.sameerasw.airsync.widget.HibWidgets.start(this)
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {

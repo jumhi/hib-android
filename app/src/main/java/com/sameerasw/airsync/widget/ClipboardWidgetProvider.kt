@@ -97,7 +97,7 @@ class WidgetClipboardActivity : Activity() {
             toast("The clipboard is empty")
             return
         }
-        val ok = DesktopHub.sendTo(target, JsonUtil.createClipboardUpdateJson(text))
+        val ok = com.sameerasw.airsync.utils.ClipboardSyncManager.sendTextTo(target, text)
         toast(if (ok) "Sent to $target" else "Couldn't reach $target")
     }
 
@@ -107,8 +107,9 @@ class WidgetClipboardActivity : Activity() {
             toast("Nothing copied on a computer yet")
             return
         }
-        val cm = getSystemService(ClipboardManager::class.java)
-        val ok = runCatching { cm?.setPrimaryClip(ClipData.newPlainText("H.I.B", clip.text)); true }.getOrDefault(false)
+        val ok = runCatching {
+            com.sameerasw.airsync.utils.ClipboardSyncManager.writeOwnText(applicationContext, clip.text)
+        }.getOrDefault(false)
         toast(if (ok) "Copied from ${clip.computer}" else "Couldn't copy")
     }
 

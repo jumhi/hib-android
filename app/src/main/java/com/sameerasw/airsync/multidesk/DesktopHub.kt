@@ -162,6 +162,8 @@ object DesktopHub {
                     if (connected) AdbSetupMonitor.onComputerConnected(PrimaryLink)
                     else AdbSetupMonitor.onComputerGone(PrimaryLink.id)
                     if (connected) onLayoutHandshake(PrimaryLink) else layout.forget(PrimaryLink.id)
+                    // Clipboard catch-up (SPACE.md §16.2): the primary gets the current clip when it is back.
+                    if (connected) com.sameerasw.airsync.utils.ClipboardSyncManager.onLinkReady(PrimaryLink.id)
                 }
             }
             launch {
@@ -446,6 +448,12 @@ object DesktopHub {
         // H.I.B Home: every computer's own battery / now playing and its copied text, primary or not.
         if (type == "status") ComputerLiveStore.onStatus(link.name, json)
         else if (type == "clipboardUpdate") ComputerLiveStore.onClipboard(link.name, json)
+        if (com.sameerasw.airsync.clip.ClipJson.isClipType(type)) {
+            // SPACE.md §16: the one clipboard component applies, relays (never back to the origin or
+            // this link) and de-duplicates.
+            com.sameerasw.airsync.utils.ClipboardSyncManager.onInboundJson(context, link.id, type!!, json)
+            return
+        }
         val previous = source.get()
         source.set(link)
         if (DesktopRouting.countsAsRequest(type)) {
@@ -478,10 +486,6 @@ object DesktopHub {
                     setEnabled(context, link.name, false)
                 }
                 else -> {
-                    if (type == "clipboardUpdate" || type == "clipboardImageUpdate") {
-                        // Universal clipboard across every computer: forward to the others.
-                        connectedLinks().filter { it.id != link.id }.forEach { it.send(json) }
-                    }
                     if (isPrimary && type == "macInfo") onPrimaryMacInfo(context, json)
                     WebSocketMessageHandler.handleIncomingMessage(context, json)
                 }
@@ -627,6 +631,7 @@ object DesktopHub {
         runCatching { ServiceManager.updateServiceState(ctx) }
         AdbSetupMonitor.onComputerConnected(session)
         onLayoutHandshake(session)
+        com.sameerasw.airsync.utils.ClipboardSyncManager.onLinkReady(session.id)
         syncIconsTo(ctx, session, macInfo)
         refresh()
         pushDesktopsListSoon()
