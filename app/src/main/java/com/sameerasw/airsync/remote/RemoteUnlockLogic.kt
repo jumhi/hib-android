@@ -121,6 +121,8 @@ class UnlockFlowState(val computer: String) {
         const val ERR_EXPIRED = "expired"
         const val ERR_BAD_SIGNATURE = "badSignature"
         const val ERR_BUSY = "busy"
+        /** SPACE.md §15.5: the Mac's helper isn't allowed to type (Accessibility missing or stale). */
+        const val ERR_PERMISSION = "permission"
 
         // Phone-side errors
         const val ERR_CANCELLED = "cancelled"
@@ -139,7 +141,10 @@ class UnlockFlowState(val computer: String) {
             ERR_BUSY -> "Wait a few seconds, then try again"
             ERR_NO_LOCK_SCREEN -> "Set up a fingerprint or screen lock on this phone first"
             ERR_NO_ANSWER -> "$name didn't answer. Try again."
-            else -> "Couldn't unlock — check the password in H.I.B on $name"
+            ERR_PERMISSION -> "H.I.B Input on $name needs Accessibility again. On the Mac: Privacy & Security → " +
+                "Accessibility → select H.I.B Input → remove (−) → allow it again."
+            ERR_WRONG_PASSWORD -> "$name's password changed — set up Unlock from phone again there."
+            else -> "Couldn't unlock $name. Try again, or unlock it at the desk."
         }
     }
 }

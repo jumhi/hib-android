@@ -419,68 +419,6 @@ fun RemoteStatusRow(ui: RemoteStream.Ui, live: Boolean, onLock: () -> Unit, modi
     }
 }
 
-/**
- * [⌨][Esc][Tab][⌘][⌥][←][↑][↓][→] — the modifier keys stick for the next key or letter (labels match the
- * target: Ctrl/Alt on a PC).
- */
-@Composable
-fun RemoteKeyStrip(
-    isWindows: Boolean,
-    keyboardOpen: Boolean,
-    sticky: Set<String>,
-    onKeyboard: () -> Unit,
-    onKey: (Int) -> Unit,
-    onToggle: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val cmd = if (isWindows) "ctrl" else "command"
-    val opt = if (isWindows) "alt" else "option"
-    Row(
-        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        StripKey(selected = keyboardOpen, onClick = onKeyboard) {
-            Icon(Icons.Rounded.Keyboard, contentDescription = if (keyboardOpen) "Hide keyboard" else "Show keyboard", modifier = Modifier.size(20.dp))
-        }
-        StripKey(onClick = { onKey(KEY_ESCAPE) }) { Text("Esc") }
-        StripKey(onClick = { onKey(KEY_TAB) }) { Text("Tab") }
-        StripKey(selected = cmd in sticky, onClick = { onToggle(cmd) }) { Text(if (isWindows) "Ctrl" else "⌘") }
-        StripKey(selected = opt in sticky, onClick = { onToggle(opt) }) { Text(if (isWindows) "Alt" else "⌥") }
-        StripKey(onClick = { onKey(KEY_LEFT) }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Left", Modifier.size(18.dp)) }
-        StripKey(onClick = { onKey(KEY_UP) }) { Icon(Icons.Rounded.ArrowUpward, "Up", Modifier.size(18.dp)) }
-        StripKey(onClick = { onKey(KEY_DOWN) }) { Icon(Icons.Rounded.ArrowDownward, "Down", Modifier.size(18.dp)) }
-        StripKey(onClick = { onKey(KEY_RIGHT) }) { Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Right", Modifier.size(18.dp)) }
-    }
-}
-
-@Composable
-private fun StripKey(selected: Boolean = false, onClick: () -> Unit, content: @Composable () -> Unit) {
-    if (selected) {
-        FilledTonalButton(
-            onClick = onClick,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
-            modifier = Modifier.height(40.dp)
-        ) { content() }
-    } else {
-        OutlinedButton(
-            onClick = onClick,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
-            modifier = Modifier.height(40.dp)
-        ) { content() }
-    }
-}
-
-// macOS virtual keycodes (the Remote's `keypress` stays in them; Windows maps them).
-const val KEY_RETURN = 36
-const val KEY_TAB = 48
-const val KEY_DELETE = 51
-const val KEY_ESCAPE = 53
-const val KEY_LEFT = 123
-const val KEY_RIGHT = 124
-const val KEY_DOWN = 125
-const val KEY_UP = 126
-
 /** Swaps between the states of the picture area with a short fade. */
 @Composable
 fun <T> RemoteFade(state: T, modifier: Modifier = Modifier, content: @Composable (T) -> Unit) {

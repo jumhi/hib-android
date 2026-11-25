@@ -153,8 +153,9 @@ class RemoteUnlockTest {
         assertEquals("Set up unlock again on PC-INTERN", m("keyInvalidated"))
         assertEquals("Set up unlock again on PC-INTERN", m("badSignature"))
         assertEquals("Set up unlock again on PC-INTERN", m("noKey"))
-        assertEquals("Couldn't unlock — check the password in H.I.B on PC-INTERN", m("wrongPassword"))
-        assertEquals("Couldn't unlock — check the password in H.I.B on PC-INTERN", m("failed"))
+        // SPACE.md §15.5: no more "check the password" for everything.
+        assertEquals("PC-INTERN's password changed — set up Unlock from phone again there.", m("wrongPassword"))
+        assertEquals("Couldn't unlock PC-INTERN. Try again, or unlock it at the desk.", m("failed"))
         assertEquals("PC-INTERN is already unlocked", m("notLocked"))
         assertEquals("That took too long. Try again.", m("expired"))
         assertEquals("Wait a few seconds, then try again", m("busy"))
