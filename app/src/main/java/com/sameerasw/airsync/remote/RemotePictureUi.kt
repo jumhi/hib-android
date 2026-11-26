@@ -222,13 +222,15 @@ fun RemotePicture(stream: RemoteStream, aspect: Float, modifier: Modifier = Modi
                         isOpaque = true
                         surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                             private var surface: Surface? = null
+                            // A new view (mode switch, layout change) only re-binds the decoder; the /screen
+                            // session doesn't depend on it (SPACE.md §15.3).
                             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
-                                surface = Surface(st).also { stream.setSurface(it) }
+                                surface = Surface(st).also { stream.attachSurface(it) }
                             }
                             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {}
                             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
-                                stream.setSurface(null)
-                                surface?.release(); surface = null
+                                surface?.let { stream.detachSurface(it); it.release() }
+                                surface = null
                                 return true
                             }
                             override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}

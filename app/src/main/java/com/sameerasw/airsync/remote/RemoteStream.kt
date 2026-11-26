@@ -14,9 +14,10 @@ import kotlinx.coroutines.flow.update
 
 /**
  * Phone Remote: the live picture of one computer (SPACE.md §15.3). The screen tells it what it wants
- * ([want]: computer, display, view, quality, and whether the picture is visible at all) and hands it the surface;
- * it opens `/screen` only while all of that holds, reconnects after drops, and closes the moment the picture
- * leaves the screen (backgrounded, page changed, computer switched, picture off). Main thread only.
+ * ([want]: computer, display, view, quality, and whether the picture is visible at all); it opens `/screen` only
+ * while that holds, reconnects after drops, and closes the moment the picture leaves the screen (backgrounded,
+ * page changed, computer switched, picture off). Surfaces come and go with the views ([attachSurface] /
+ * [detachSurface]); they only re-bind the decoder, never the session ([ScreenSessionPolicy]). Main thread only.
  */
 class RemoteStream(context: Context) {
     private val app = context.applicationContext
@@ -58,8 +59,6 @@ class RemoteStream(context: Context) {
     private val _cursor = MutableStateFlow(Cursor())
     val cursor: StateFlow<Cursor> = _cursor.asStateFlow()
 
-    private var surface: Surface? = null
-    private var want: Want? = null
     private var view: ViewRect = ViewRect.FULL
     private var codec = CODEC_H264
     /** The computer [codec] was learned for (a JPEG fallback sticks to that computer). */
@@ -71,29 +70,38 @@ class RemoteStream(context: Context) {
     private var refusedUntil = 0L
     private var picturesSinceOpen = 0
 
-    fun setSurface(s: Surface?) {
-        if (s === surface) return
-        surface = s
-        restart()
-    }
-
-    /** Null: no picture wanted (off, page hidden, phone backgrounded, computer locked or not connected). */
-    fun want(w: Want?) {
-        if (w == want) return
-        val prev = want
-        want = w
-        // Only the display changed on a live session: switch in place (new screenOpened + keyframe).
-        if (w != null && prev != null && client != null && w.copy(display = prev.display) == prev && _ui.value.phase == Phase.LIVE) {
-            client?.sendJson(RemoteJson.screenDisplay(w.display))
+    private val sessions = ScreenSessionPolicy(object : ScreenSessionPolicy.Io<Surface> {
+        override fun open(want: Want, surface: Surface?): Boolean = openSession(want, surface)
+        override fun close() = closeSession()
+        override fun bind(surface: Surface?) { decoder?.setSurface(surface) }
+        override fun keyframe() = requestKeyframe()
+        override fun switchDisplay(display: String) {
+            client?.sendJson(RemoteJson.screenDisplay(display))
             decoder?.resync()
-            return
         }
+    })
+
+    /** A picture view's surface is ready; the session (if any) keeps going and draws into it after a keyframe. */
+    fun attachSurface(s: Surface) = sessions.attach(s)
+
+    /**
+     * [s] is being destroyed: the decoder stops drawing into it before this returns (bounded wait), so the view can
+     * release it. Ignored when a newer surface already took over.
+     */
+    fun detachSurface(s: Surface) = sessions.detach(s)
+
+    /** Null: no picture wanted (off, page hidden, phone backgrounded, no computer or not connected). */
+    fun want(w: Want?) {
+        if (w == sessions.want) return
         // The view follows the screen's zoom ([setView]); the screen resets it for a new computer or display.
         if (w != null && codecFor?.let { RemoteHub.key(it) } != RemoteHub.key(w.computer)) {
             codec = CODEC_H264
             codecFor = w.computer
         }
-        restart()
+        // Only the display changed on a session that is up (live, or paused while locked): switch in place.
+        val up = client != null && (_ui.value.phase == Phase.LIVE || _ui.value.phase == Phase.PAUSED)
+        sessions.setWant(w, up)
+        if (w == null) _ui.value = Ui()
     }
 
     /** The zoomed region changed (the caller throttles). */
@@ -111,29 +119,28 @@ class RemoteStream(context: Context) {
     fun retryNow() {
         refusedUntil = 0L
         retryDelay = RETRY_MIN_MS
-        restart()
+        sessions.reopen()
     }
 
     fun dispose() {
-        want = null
-        close()
+        sessions.setWant(null, up = false)
+        closeSession()
     }
 
-    private fun restart() {
-        close()
-        val w = want ?: run { _ui.value = Ui(); return }
-        val s = surface ?: return
-        if (System.currentTimeMillis() < refusedUntil) return
+    /** Only through [sessions]. */
+    private fun openSession(w: Want, s: Surface?): Boolean {
+        if (System.currentTimeMillis() < refusedUntil) return false
         val ep = DesktopHub.linkEndpoint(w.computer)
         if (ep == null) {
             _ui.value = Ui(phase = Phase.CLOSED, closeCode = ScreenStreamClient.CODE_UNREACHABLE)
-            return
+            return false
         }
-        val key = runCatching { CryptoUtil.decodeKey(ep.key) }.getOrNull() ?: return
+        val key = runCatching { CryptoUtil.decodeKey(ep.key) }.getOrNull() ?: return false
         val dials = TailscaleAddrs.plan(listOfNotNull(ep.ip), RemoteAddrStore.get(app, w.computer))
         picturesSinceOpen = 0
         _ui.value = Ui(phase = Phase.CONNECTING, display = w.display, codec = codec)
-        val dec = H264Decoder(s, decoderListener)
+        val dec = H264Decoder(decoderListener)
+        s?.let { dec.setSurface(it) }
         decoder = dec
         val c = ScreenStreamClient(
             httpClient, dials, ep.port, key,
@@ -143,9 +150,11 @@ class RemoteStream(context: Context) {
         c.decodeMsProvider = { dec.decodeMs }
         client = c
         c.start()
+        return true
     }
 
-    private fun close() {
+    /** Only through [sessions] (or [dispose]). Idempotent. */
+    private fun closeSession() {
         retry?.let { main.removeCallbacks(it) }
         retry = null
         client?.stop()
@@ -156,7 +165,7 @@ class RemoteStream(context: Context) {
 
     private fun scheduleRetry(ms: Long) {
         retry?.let { main.removeCallbacks(it) }
-        val r = Runnable { retry = null; if (want != null) restart() }
+        val r = Runnable { retry = null; sessions.reopen() }
         retry = r
         main.postDelayed(r, ms)
     }
@@ -169,7 +178,7 @@ class RemoteStream(context: Context) {
                 if (codec == CODEC_JPEG) return@post
                 Log.w(TAG, "Falling back to JPEG pictures")
                 codec = CODEC_JPEG
-                restart()
+                sessions.reopen()
             }
         }
 
@@ -218,7 +227,7 @@ class RemoteStream(context: Context) {
         override fun onClosed(code: Int, reason: String) {
             main.post {
             if (decoder !== dec) return@post
-            close()
+            sessions.ended()
             _ui.update { it.copy(phase = Phase.CLOSED, closeCode = code, hasPicture = false) }
             when (code) {
                 ScreenStreamClient.CODE_BAD_KEY -> {}
