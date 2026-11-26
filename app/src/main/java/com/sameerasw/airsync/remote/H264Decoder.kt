@@ -11,16 +11,20 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
 import java.nio.ByteBuffer
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
- * Phone Remote (SPACE.md §15.3): turns the `/screen` frames into pictures on [surface].
+ * Phone Remote (SPACE.md §15.3): turns the `/screen` frames into pictures on the current surface ([setSurface]).
  *  - H.264: hardware MediaCodec in async mode on its own thread, rendering each output as soon as it is ready
  *    (no presentation-time pacing: lowest latency). A config frame (SPS+PPS) (re)configures the decoder; until a
  *    keyframe arrives after a (re)start or a drop, delta frames are skipped.
  *  - JPEG fallback (kind 4): decoded with BitmapFactory and drawn into the same surface.
  * When the phone falls behind it drops what is queued and asks for a keyframe ([Listener.onNeedKeyframe]).
+ * The surface can change under a running session (a new picture view): the codec restarts on the new one from the
+ * last config and waits for a keyframe; with no surface, frames are skipped (the config is kept).
  */
-class H264Decoder(private val surface: Surface, private val listener: Listener) {
+class H264Decoder(private val listener: Listener) {
 
     interface Listener {
         /** The decoder lost sync (dropped frames or an error): ask the computer for a keyframe. */
@@ -34,6 +38,8 @@ class H264Decoder(private val surface: Surface, private val listener: Listener) 
     private val thread = HandlerThread("hib-remote-decode").apply { start() }
     private val handler = Handler(thread.looper)
     private var codec: MediaCodec? = null
+    /** Decoder thread only. */
+    private var surface: Surface? = null
     private var config: ByteArray? = null
     private var width = 1920
     private var height = 1080
@@ -51,6 +57,33 @@ class H264Decoder(private val surface: Surface, private val listener: Listener) 
     /** The encoded size from `screenOpened` (the decoder needs a size to start; the stream's SPS wins). */
     fun setSize(w: Int, h: Int) = handler.post {
         if (w > 0 && h > 0) { width = w; height = h }
+    }
+
+    /**
+     * Draw into [s] from now on (main thread). Null blocks up to [DETACH_WAIT_MS] until the codec has let go of the
+     * old surface, so the view can release it right after. A new surface restarts the codec from the last config;
+     * the caller asks the computer for a keyframe.
+     */
+    fun setSurface(s: Surface?) {
+        if (s == null) {
+            val done = CountDownLatch(1)
+            val posted = handler.post {
+                surface = null
+                stopCodec()
+                pending.clear()
+                waitingForKey = true
+                done.countDown()
+            }
+            if (posted) runCatching { done.await(DETACH_WAIT_MS, TimeUnit.MILLISECONDS) }
+            return
+        }
+        handler.post {
+            if (released || s === surface) return@post
+            surface = s
+            waitingForKey = true
+            pending.clear()
+            if (config != null) startCodec() else stopCodec()
+        }
     }
 
     /** Any thread. */
@@ -84,7 +117,8 @@ class H264Decoder(private val surface: Surface, private val listener: Listener) 
                 waitingForKey = true
             }
             ScreenFrame.KIND_KEYFRAME -> {
-                if (codec == null) { listener.onNeedKeyframe(); return }
+                // No surface (between views): skip; the next surface asks for its own keyframe.
+                if (codec == null) { if (surface != null) listener.onNeedKeyframe(); return }
                 // A keyframe makes everything queued before it useless.
                 pending.removeAll { it.kind == ScreenFrame.KIND_FRAME }
                 waitingForKey = false
@@ -143,6 +177,7 @@ class H264Decoder(private val surface: Surface, private val listener: Listener) 
     private fun startCodec() {
         stopCodec()
         val cfg = config ?: return
+        val out = surface ?: return
         val format = MediaFormat.createVideoFormat(MIME, width, height)
         val (sps, pps) = splitConfig(cfg)
         val inlineConfig = sps == null || pps == null
@@ -162,14 +197,14 @@ class H264Decoder(private val surface: Surface, private val listener: Listener) 
             created = c
             c.setCallback(callback, handler)
             try {
-                c.configure(format, surface, null, 0)
+                c.configure(format, out, null, 0)
             } catch (e: Exception) {
                 // Some decoders reject the low-latency keys: try once without them.
                 format.removeKey(MediaFormat.KEY_LOW_LATENCY)
                 format.removeKey(MediaFormat.KEY_PRIORITY)
                 c.reset()
                 c.setCallback(callback, handler)
-                c.configure(format, surface, null, 0)
+                c.configure(format, out, null, 0)
             }
             c.start()
             codec = c
@@ -195,6 +230,8 @@ class H264Decoder(private val surface: Surface, private val listener: Listener) 
     }
 
     private fun restartAfterError() {
+        // Errors while no surface is bound are the old view going away, not the phone's decoder.
+        if (surface == null) { stopCodec(); return }
         failures++
         if (failures > 3) {
             stopCodec()
@@ -238,14 +275,15 @@ class H264Decoder(private val surface: Surface, private val listener: Listener) 
 
     private fun drawJpeg(bytes: ByteArray) {
         if (codec != null) stopCodec()
+        val out = surface ?: return
         val bmp = runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }.getOrNull() ?: return
         try {
-            val canvas = surface.lockHardwareCanvas()
+            val canvas = out.lockHardwareCanvas()
             try {
                 canvas.drawColor(android.graphics.Color.BLACK)
                 canvas.drawBitmap(bmp, null, Rect(0, 0, canvas.width, canvas.height), null)
             } finally {
-                surface.unlockCanvasAndPost(canvas)
+                out.unlockCanvasAndPost(canvas)
             }
             listener.onRendered()
         } catch (e: Exception) {
@@ -259,6 +297,7 @@ class H264Decoder(private val surface: Surface, private val listener: Listener) 
         private const val TAG = "RemoteDecoder"
         private const val MIME = MediaFormat.MIMETYPE_VIDEO_AVC
         private const val MAX_PENDING = 6
+        private const val DETACH_WAIT_MS = 300L
 
         /** Splits an Annex-B config into SPS and PPS (each with its start code). Nulls when either is missing. */
         fun splitConfig(annexB: ByteArray): Pair<ByteArray?, ByteArray?> {
